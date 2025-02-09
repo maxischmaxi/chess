@@ -147,7 +147,7 @@ export function Chess() {
             window.removeEventListener("keydown", onKeyDown);
             window.removeEventListener("mousemove", onMouseMove);
         };
-    }, [bestMove, board, board.activePlayer, board.fens, board.fields, iAm]);
+    }, [bestMove, board, board.activePlayer, board.fens, board.fields]);
 
     useEffect(() => {
         const worker = new Worker("/api/stockfish");
