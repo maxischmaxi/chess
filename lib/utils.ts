@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { Piece } from "./pieces";
+import { ActivePiece, Piece } from "./pieces";
 import { Chessfield } from "./field";
 
 export function cn(...inputs: ClassValue[]) {
@@ -49,8 +49,8 @@ export function isOnBoard(r: number, c: number): boolean {
     return r >= 0 && r < 8 && c >= 0 && c < 8;
 }
 
-export function getActivePlayer(fen: string): "white" | "black" {
-    return fen.split(" ")[1] === "w" ? "white" : "black";
+export function getActivePlayer(fen: string): "w" | "b" {
+    return fen.split(" ")[1] === "w" ? "w" : "b";
 }
 
 export function createChessboard(fen: string): Chessfield[][] {
@@ -243,4 +243,139 @@ export function boardToFen(
     const fen = `${boardPart} ${nextPlayer} - - 0 1`;
 
     return fen;
+}
+
+export function drawArrow(
+    context: CanvasRenderingContext2D,
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+): void {
+    context.beginPath();
+    context.lineWidth = 3;
+    context.moveTo(fromX, fromY);
+    context.lineTo(toX, toY);
+    context.stroke();
+    context.closePath();
+
+    const angle = Math.atan2(toY - fromY, toX - fromX);
+    const headlen = 10; // length of head in pixels
+    const dx = headlen * Math.cos(angle);
+    const dy = headlen * Math.sin(angle);
+    context.beginPath();
+    context.moveTo(toX, toY);
+    context.lineTo(toX - dx - dy, toY - dy + dx);
+    context.lineTo(toX - dx + dy, toY - dy - dx);
+    context.fill();
+    context.closePath();
+}
+
+export function drawImage(
+    context: CanvasRenderingContext2D,
+    piece: Piece,
+    mouseX: number,
+    mouseY: number,
+    cellSize: number,
+    activePiece?: ActivePiece,
+): void {
+    const id = `piece-${piece}`;
+    const pieceImage = document.getElementById(id) as
+        | HTMLImageElement
+        | undefined;
+
+    if (pieceImage) {
+        context.drawImage(
+            pieceImage,
+            mouseX - (activePiece?.grabPoint.x || 0),
+            mouseY - (activePiece?.grabPoint.y || 0),
+            cellSize,
+            cellSize,
+        );
+    }
+}
+
+export function drawDebugInfos(
+    context: CanvasRenderingContext2D,
+    r: number,
+    c: number,
+    cellSize: number,
+    field: Chessfield,
+) {
+    context.fillStyle = "black";
+    context.font = "12px sans-serif";
+    context.fillText(`${c},${r}`, c * cellSize + 10, r * cellSize + 20);
+
+    context.fillText(
+        `${field.letterLabel}${field.numberLabel}`,
+        c * cellSize + 10,
+        r * cellSize + 35,
+    );
+}
+
+export function drawCircle(
+    context: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    cellSize: number,
+    lineWidth: number = 1,
+) {
+    context.strokeStyle = "rgba(0,0,0,0.5)";
+    context.lineWidth = lineWidth;
+    context.beginPath();
+    context.arc(
+        x + cellSize / 2,
+        y + cellSize / 2,
+        cellSize / 3.5,
+        0,
+        2 * Math.PI,
+    );
+    context.stroke();
+    context.closePath();
+}
+
+export function drawCell(
+    context: CanvasRenderingContext2D,
+    r: number,
+    c: number,
+    cellSize: number,
+): void {
+    const isBlackField = (r + c) % 2 === 0;
+    context.fillStyle = isBlackField ? "#769656" : "#eeeed2";
+    context.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+}
+
+export function drawStartCell(
+    context: CanvasRenderingContext2D,
+    r: number,
+    c: number,
+    cellSize: number,
+): void {
+    context.fillStyle = "#ff9e61";
+    context.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+}
+
+// TODO: throw wird noch nicht gezeichnet, ka warum
+export function drawThrow(
+    context: CanvasRenderingContext2D,
+    r: number,
+    c: number,
+    cellSize: number,
+    lineWidth: number = 2,
+): void {
+    context.strokeStyle = "#ff0000";
+    context.lineWidth = lineWidth;
+    context.beginPath();
+
+    const centerX = c * cellSize + cellSize / 2;
+    const centerY = r * cellSize + cellSize / 2;
+
+    context.moveTo(centerX - 50, centerY - 50);
+    context.lineTo(centerX + 50, centerY + 50);
+
+    context.moveTo(centerX + 50, centerY - 50);
+    context.lineTo(centerX - 50, centerY + 50);
+
+    context.stroke();
+    context.closePath();
 }

@@ -6,3 +6,10 @@ export type Chessfield = {
     letterLabel: string;
     piece?: Piece;
 };
+
+export type Board = {
+    fields: Chessfield[][];
+    fens: string[];
+    activePlayer: "w" | "b";
+    fenIndex: number;
+};
