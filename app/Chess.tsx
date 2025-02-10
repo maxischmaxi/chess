@@ -2,10 +2,11 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useImage } from "@/hooks/useImage";
 import { CHESSBOARD_SIZE } from "@/lib/definitions";
 import { Board } from "@/lib/field";
 import { getPossibleMoves } from "@/lib/moves";
-import { ActivePiece } from "@/lib/pieces";
+import { ActivePiece, Piece } from "@/lib/pieces";
 import {
     boardToFen,
     createChessboard,
@@ -51,6 +52,18 @@ export function Chess() {
     const [importFen, setImportFen] = useState("");
     const [bestMove, setBestMove] = useState<string | null>(null);
     const [workerIndicator, setWorkerIndicator] = useState<string>("");
+    const bishopB = useImage({ piece: Piece.BlackBishop });
+    const bishopW = useImage({ piece: Piece.WhiteBishop });
+    const kingB = useImage({ piece: Piece.BlackKing });
+    const kingW = useImage({ piece: Piece.WhiteKing });
+    const knightB = useImage({ piece: Piece.BlackKnight });
+    const knightW = useImage({ piece: Piece.WhiteKnight });
+    const pawnB = useImage({ piece: Piece.BlackPawn });
+    const pawnW = useImage({ piece: Piece.WhitePawn });
+    const queenB = useImage({ piece: Piece.BlackQueen });
+    const queenW = useImage({ piece: Piece.WhiteQueen });
+    const rookB = useImage({ piece: Piece.BlackRook });
+    const rookW = useImage({ piece: Piece.WhiteRook });
 
     useEffect(() => {
         function onKeyDown(event: KeyboardEvent) {
@@ -187,6 +200,19 @@ export function Chess() {
     }
 
     useEffect(() => {
+        if (!bishopB.ready) return;
+        if (!bishopW.ready) return;
+        if (!kingB.ready) return;
+        if (!kingW.ready) return;
+        if (!knightB.ready) return;
+        if (!knightW.ready) return;
+        if (!pawnB.ready) return;
+        if (!pawnW.ready) return;
+        if (!queenB.ready) return;
+        if (!queenW.ready) return;
+        if (!rookB.ready) return;
+        if (!rookW.ready) return;
+
         if (!baseCanvas.current) return;
         if (!eventCanvas.current) return;
 
@@ -293,32 +319,277 @@ export function Chess() {
                         drawThrow(eventContext, x, y, cellSize, 4);
                     }
 
-                    drawImage(
-                        eventContext,
-                        piece,
-                        mousePosition.x,
-                        mousePosition.y,
-                        cellSize,
-                        activePiece,
-                    );
+                    switch (piece) {
+                        case Piece.BlackBishop:
+                            drawImage(
+                                eventContext,
+                                bishopB.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                                activePiece,
+                            );
+                            break;
+                        case Piece.WhiteBishop:
+                            drawImage(
+                                eventContext,
+                                bishopW.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                                activePiece,
+                            );
+                            break;
+                        case Piece.BlackKing:
+                            drawImage(
+                                eventContext,
+                                kingB.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                                activePiece,
+                            );
+                            break;
+                        case Piece.WhiteKing:
+                            drawImage(
+                                eventContext,
+                                kingW.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                                activePiece,
+                            );
+                            break;
+                        case Piece.BlackKnight:
+                            drawImage(
+                                eventContext,
+                                knightB.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                                activePiece,
+                            );
+                            break;
+                        case Piece.WhiteKnight:
+                            drawImage(
+                                eventContext,
+                                knightW.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                                activePiece,
+                            );
+                            break;
+                        case Piece.BlackPawn:
+                            drawImage(
+                                eventContext,
+                                pawnB.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                                activePiece,
+                            );
+                            break;
+                        case Piece.WhitePawn:
+                            drawImage(
+                                eventContext,
+                                pawnW.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                                activePiece,
+                            );
+                            break;
+                        case Piece.BlackQueen:
+                            drawImage(
+                                eventContext,
+                                queenB.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                                activePiece,
+                            );
+                            break;
+                        case Piece.WhiteQueen:
+                            drawImage(
+                                eventContext,
+                                queenW.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                                activePiece,
+                            );
+                            break;
+                        case Piece.BlackRook:
+                            drawImage(
+                                eventContext,
+                                rookB.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                                activePiece,
+                            );
+                            break;
+                        case Piece.WhiteRook:
+                            drawImage(
+                                eventContext,
+                                rookW.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                                activePiece,
+                            );
+                            break;
+                        default:
+                            break;
+                    }
                 } else {
-                    drawImage(
-                        baseContext,
-                        piece,
-                        c * cellSize,
-                        r * cellSize,
-                        cellSize,
-                    );
+                    switch (piece) {
+                        case Piece.BlackBishop:
+                            drawImage(
+                                baseContext,
+                                bishopB.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                            );
+                            break;
+                        case Piece.WhiteBishop:
+                            drawImage(
+                                baseContext,
+                                bishopW.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                            );
+                            break;
+                        case Piece.BlackKing:
+                            drawImage(
+                                baseContext,
+                                kingB.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                            );
+                            break;
+                        case Piece.WhiteKing:
+                            drawImage(
+                                baseContext,
+                                kingW.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                            );
+                            break;
+                        case Piece.BlackKnight:
+                            drawImage(
+                                baseContext,
+                                knightB.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                            );
+                            break;
+                        case Piece.WhiteKnight:
+                            drawImage(
+                                baseContext,
+                                knightW.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                            );
+                            break;
+                        case Piece.BlackPawn:
+                            drawImage(
+                                baseContext,
+                                pawnB.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                            );
+                            break;
+                        case Piece.WhitePawn:
+                            drawImage(
+                                baseContext,
+                                pawnW.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                            );
+                            break;
+                        case Piece.BlackQueen:
+                            drawImage(
+                                baseContext,
+                                queenB.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                            );
+                            break;
+                        case Piece.WhiteQueen:
+                            drawImage(
+                                baseContext,
+                                queenW.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                            );
+                            break;
+                        case Piece.BlackRook:
+                            drawImage(
+                                baseContext,
+                                rookB.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                            );
+                            break;
+                        case Piece.WhiteRook:
+                            drawImage(
+                                baseContext,
+                                rookW.image!,
+                                c * cellSize,
+                                r * cellSize,
+                                cellSize,
+                            );
+                            break;
+                        default:
+                            break;
+                    }
                 }
             }
         }
     }, [
         activePiece,
         bestMove,
+        bishopB.image,
+        bishopB.ready,
+        bishopW.image,
+        bishopW.ready,
         board.activePlayer,
         board.fields,
+        kingB.image,
+        kingB.ready,
+        kingW.image,
+        kingW.ready,
+        knightB.image,
+        knightB.ready,
+        knightW.image,
+        knightW.ready,
         mousePosition.x,
         mousePosition.y,
+        pawnB.image,
+        pawnB.ready,
+        pawnW.image,
+        pawnW.ready,
+        queenB.image,
+        queenB.ready,
+        queenW.image,
+        queenW.ready,
+        rookB.image,
+        rookB.ready,
+        rookW.image,
+        rookW.ready,
     ]);
 
     function onMouseDown(event: ReactMouseEvent) {

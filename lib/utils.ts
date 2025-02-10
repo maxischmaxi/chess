@@ -273,26 +273,19 @@ export function drawArrow(
 
 export function drawImage(
     context: CanvasRenderingContext2D,
-    piece: Piece,
+    img: HTMLImageElement,
     mouseX: number,
     mouseY: number,
     cellSize: number,
     activePiece?: ActivePiece,
 ): void {
-    const id = `piece-${piece}`;
-    const pieceImage = document.getElementById(id) as
-        | HTMLImageElement
-        | undefined;
-
-    if (pieceImage) {
-        context.drawImage(
-            pieceImage,
-            mouseX - (activePiece?.grabPoint.x || 0),
-            mouseY - (activePiece?.grabPoint.y || 0),
-            cellSize,
-            cellSize,
-        );
-    }
+    context.drawImage(
+        img,
+        mouseX - (activePiece?.grabPoint.x || 0),
+        mouseY - (activePiece?.grabPoint.y || 0),
+        cellSize,
+        cellSize,
+    );
 }
 
 export function drawDebugInfos(
