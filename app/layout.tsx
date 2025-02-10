@@ -1,7 +1,24 @@
+import "./globals.css";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import { ThemeProvider } from "@/components/theme-provider";
+import { AppSidebar } from "@/components/app-sidebar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import dynamic from "next/dynamic";
+
+const StockfishProvider = dynamic(() =>
+    import("@/components/stockfish-provider").then(
+        (mod) => mod.StockfishProvider,
+    ),
+);
+const ImagesProvider = dynamic(() =>
+    import("@/components/images-provider").then((mod) => mod.ImagesProvider),
+);
+const ChessProvider = dynamic(() =>
+    import("@/components/chess-provider").then((mod) => mod.ChessProvider),
+);
+const ThemeProvider = dynamic(() =>
+    import("@/components/theme-provider").then((mod) => mod.ThemeProvider),
+);
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -28,14 +45,23 @@ export default function RootLayout({
             <body
                 className={`${geistSans.variable} ${geistMono.variable} antialiased`}
             >
-                <ThemeProvider
-                    attribute="class"
-                    defaultTheme="system"
-                    enableSystem
-                    disableTransitionOnChange
-                >
-                    {children}
-                </ThemeProvider>
+                <ImagesProvider>
+                    <StockfishProvider>
+                        <ThemeProvider
+                            attribute="class"
+                            defaultTheme="system"
+                            enableSystem
+                            disableTransitionOnChange
+                        >
+                            <SidebarProvider>
+                                <ChessProvider>
+                                    <AppSidebar />
+                                    <SidebarInset>{children}</SidebarInset>
+                                </ChessProvider>
+                            </SidebarProvider>
+                        </ThemeProvider>
+                    </StockfishProvider>
+                </ImagesProvider>
             </body>
         </html>
     );

@@ -1,5 +1,9 @@
-import { Chess } from "./Chess";
+import dynamic from "next/dynamic";
 
-export default function Home() {
+const Chess = dynamic(() =>
+    import("@/components/chess").then((mod) => mod.Chess),
+);
+
+export default async function Page() {
     return <Chess />;
 }
