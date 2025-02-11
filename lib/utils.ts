@@ -1,7 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { ActivePiece, Piece } from "./pieces";
-import { Chessfield } from "./field";
+import { Board, Chessfield } from "./field";
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -116,12 +116,7 @@ function createField(
     numberLabel: string,
     piece?: Piece,
 ): Chessfield {
-    // letterLabel = 'a' + col
     const letterLabel = String.fromCharCode("a".charCodeAt(0) + col);
-
-    // Farbzuweisung: Wir wollen "a1" als schwarzes Feld:
-    //  => "a1" = row=7, col=0 => sum=7 => ungerade => black
-    //  => => (row + col) % 2 === 0 => "white", sonst "black".
     const color = (row + col) % 2 === 0 ? "white" : "black";
 
     return {
@@ -167,6 +162,10 @@ function parseFenChar(ch: string): Piece | undefined {
     }
 }
 
+export function getPieceColor(piece: Piece): "w" | "b" {
+    return isWhitePiece(piece) ? "w" : "b";
+}
+
 export function getPieceImage(piece: Piece): string {
     switch (piece) {
         case Piece.WhitePawn:
@@ -204,30 +203,23 @@ export function boardToFen(
 ): string {
     const fenRanks = [];
 
-    // Wir iterieren von oben (row=0 => Rang 8) nach unten (row=7 => Rang 1)
     for (let row = 0; row < 8; row++) {
         let emptyCount = 0;
         let fenRank = "";
 
         for (let col = 0; col < 8; col++) {
-            // Eintrag im Board
             const cell = board[row][col];
-            // Hat die Zelle ein piece?
             if (!cell || !cell.piece) {
-                // Leeres Feld => Leerzählung hochzählen
                 emptyCount++;
             } else {
-                // Falls wir zuvor leere Felder hatten, diese zuerst niederschreiben
                 if (emptyCount > 0) {
                     fenRank += emptyCount;
                     emptyCount = 0;
                 }
-                // Figurenbuchstabe ermitteln (z.B. "p", "P", "r" etc.)
                 fenRank += cell.piece;
             }
         }
 
-        // Am Ende der Zeile: Falls noch leere Felder übrig sind, anhängen
         if (emptyCount > 0) {
             fenRank += emptyCount;
         }
@@ -235,140 +227,71 @@ export function boardToFen(
         fenRanks.push(fenRank);
     }
 
-    // "rnbqkbnr/..." Teil fertig => Zusammenfassen
     const boardPart = fenRanks.join("/");
-
-    // FEN-Teile zusammenbauen.
-    // Minimalvariante (kein Castling "-", kein En-Passant "-", Halbzug-Zähler "0", Zugnummer "1"):
-    const fen = `${boardPart} ${nextPlayer} - - 0 1`;
-
-    return fen;
+    return `${boardPart} ${nextPlayer} - - 0 1`;
 }
 
-export function drawArrow(
-    context: CanvasRenderingContext2D,
-    fromX: number,
-    fromY: number,
-    toX: number,
-    toY: number,
-): void {
-    context.beginPath();
-    context.lineWidth = 3;
-    context.moveTo(fromX, fromY);
-    context.lineTo(toX, toY);
-    context.stroke();
-    context.closePath();
+export function canCastleByFen(
+    fen: string,
+    color: "w" | "b",
+    side: "k" | "q",
+): boolean {
+    const castling = fen.split(" ")[2];
 
-    const angle = Math.atan2(toY - fromY, toX - fromX);
-    const headlen = 10; // length of head in pixels
-    const dx = headlen * Math.cos(angle);
-    const dy = headlen * Math.sin(angle);
-    context.beginPath();
-    context.moveTo(toX, toY);
-    context.lineTo(toX - dx - dy, toY - dy + dx);
-    context.lineTo(toX - dx + dy, toY - dy - dx);
-    context.fill();
-    context.closePath();
+    if (castling === "-") {
+        return false;
+    }
+
+    if (color === "w") {
+        return castling.includes(side.toUpperCase());
+    }
+
+    return castling.includes(side);
 }
 
-export function drawImage(
-    context: CanvasRenderingContext2D,
-    img: HTMLImageElement,
+export function canCastleByBoard(
+    board: Chessfield[][],
+    color: "w" | "b",
+    side: "k" | "q",
+): boolean {
+    const fen = boardToFen(board, color);
+    return canCastleByFen(fen, color, side);
+}
+
+export function isMouseOverCell(
+    row: number,
+    col: number,
+    cellSize: number,
     mouseX: number,
     mouseY: number,
-    cellSize: number,
-    activePiece?: ActivePiece,
-): void {
-    context.drawImage(
-        img,
-        mouseX - (activePiece?.grabPoint.x || 0),
-        mouseY - (activePiece?.grabPoint.y || 0),
-        cellSize,
-        cellSize,
+): boolean {
+    const x = col * cellSize;
+    const y = row * cellSize;
+
+    return (
+        mouseX >= x &&
+        mouseX <= x + cellSize &&
+        mouseY >= y &&
+        mouseY <= y + cellSize
     );
 }
 
-export function drawDebugInfos(
-    context: CanvasRenderingContext2D,
-    r: number,
-    c: number,
-    cellSize: number,
-    field: Chessfield,
-) {
-    context.fillStyle = "black";
-    context.font = "12px sans-serif";
-    context.fillText(`${c},${r}`, c * cellSize + 10, r * cellSize + 20);
+export function canExecuteMove(
+    activePiece: ActivePiece | null,
+    piece: Piece,
+    board: Board,
+): boolean {
+    if (activePiece?.piece !== piece) {
+        return false;
+    }
 
-    context.fillText(
-        `${field.letterLabel}${field.numberLabel}`,
-        c * cellSize + 10,
-        r * cellSize + 35,
-    );
-}
+    if (isWhitePiece(piece) && board.activePlayer === "w") {
+        return true;
+    }
 
-export function drawCircle(
-    context: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    cellSize: number,
-    lineWidth: number = 1,
-) {
-    context.strokeStyle = "rgba(0,0,0,0.5)";
-    context.lineWidth = lineWidth;
-    context.beginPath();
-    context.arc(
-        x + cellSize / 2,
-        y + cellSize / 2,
-        cellSize / 3.5,
-        0,
-        2 * Math.PI,
-    );
-    context.stroke();
-    context.closePath();
-}
+    if (isBlackPiece(piece) && board.activePlayer === "b") {
+        return true;
+    }
 
-export function drawCell(
-    context: CanvasRenderingContext2D,
-    r: number,
-    c: number,
-    cellSize: number,
-): void {
-    const isBlackField = (r + c) % 2 === 0;
-    context.fillStyle = isBlackField ? "#769656" : "#eeeed2";
-    context.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
-}
-
-export function drawStartCell(
-    context: CanvasRenderingContext2D,
-    r: number,
-    c: number,
-    cellSize: number,
-): void {
-    context.fillStyle = "#ff9e61";
-    context.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
-}
-
-// TODO: throw wird noch nicht gezeichnet, ka warum
-export function drawThrow(
-    context: CanvasRenderingContext2D,
-    r: number,
-    c: number,
-    cellSize: number,
-    lineWidth: number = 2,
-): void {
-    context.strokeStyle = "#ff0000";
-    context.lineWidth = lineWidth;
-    context.beginPath();
-
-    const centerX = c * cellSize + cellSize / 2;
-    const centerY = r * cellSize + cellSize / 2;
-
-    context.moveTo(centerX - 50, centerY - 50);
-    context.lineTo(centerX + 50, centerY + 50);
-
-    context.moveTo(centerX + 50, centerY - 50);
-    context.lineTo(centerX - 50, centerY + 50);
-
-    context.stroke();
-    context.closePath();
+    return false;
 }

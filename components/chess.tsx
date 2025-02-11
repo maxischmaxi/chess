@@ -96,6 +96,8 @@ export function Chess() {
 
     function onMouseDown(event: ReactMouseEvent) {
         if (!baseCanvas.current) return;
+        if (!eventCanvas.current) return;
+
         const rect = baseCanvas.current.getBoundingClientRect();
         const mouseX = event.clientX - rect.left;
         const mouseY = event.clientY - rect.top;
@@ -109,9 +111,8 @@ export function Chess() {
 
         if (
             piece &&
-            chess.iAm === chess.board.activePlayer &&
-            ((isWhitePiece(piece) && chess.board.activePlayer === "w") ||
-                (isBlackPiece(piece) && chess.board.activePlayer === "b"))
+            ((isWhitePiece(piece) && chess.iAm === "w") ||
+                (isBlackPiece(piece) && chess.iAm === "b"))
         ) {
             chess.setActivePiece({
                 piece,
@@ -126,7 +127,9 @@ export function Chess() {
     }
 
     function onMouseUp(event: ReactMouseEvent) {
-        if (chess.activePiece && baseCanvas.current) {
+        if (!baseCanvas.current) return;
+
+        if (chess.activePiece) {
             const rect = baseCanvas.current.getBoundingClientRect();
             const mouseX = event.clientX - rect.left;
             const mouseY = event.clientY - rect.top;
@@ -172,31 +175,24 @@ export function Chess() {
     }
 
     function onMouseMove(event: ReactMouseEvent) {
-        if (chess.activePiece && baseCanvas.current) {
-            const rect = baseCanvas.current.getBoundingClientRect();
-            const mouseX = event.clientX - rect.left;
-            const mouseY = event.clientY - rect.top;
+        if (!baseCanvas.current) return;
+        const rect = baseCanvas.current.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        const mouseY = event.clientY - rect.top;
+        setMousePosition({ x: mouseX, y: mouseY });
 
-            setMousePosition({ x: mouseX, y: mouseY });
-
+        if (chess.activePiece) {
             baseCanvas.current.style.cursor = "grabbing";
         } else {
             if (!baseCanvas.current) return;
-            const rect = baseCanvas.current.getBoundingClientRect();
-            const mouseX = event.clientX - rect.left;
-            const mouseY = event.clientY - rect.top;
             const cellSize = rect.width / CHESSBOARD_SIZE;
             const row = Math.floor(mouseY / cellSize);
             const col = Math.floor(mouseX / cellSize);
-
-            if (isOnBoard(row, col)) {
-                const piece = chess.board.fields[row][col].piece;
-
-                if (piece) {
-                    baseCanvas.current.style.cursor = "pointer";
-                } else {
-                    baseCanvas.current.style.cursor = "default";
-                }
+            const piece = chess.board.fields[row][col].piece;
+            if (piece) {
+                baseCanvas.current.style.cursor = "pointer";
+            } else {
+                baseCanvas.current.style.cursor = "default";
             }
         }
     }

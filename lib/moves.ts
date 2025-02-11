@@ -1,6 +1,12 @@
 import { Chessfield } from "./field";
 import { Piece } from "./pieces";
-import { isEnemyPiece, isOnBoard, isWhitePiece } from "./utils";
+import {
+    canCastleByBoard,
+    getPieceColor,
+    isEnemyPiece,
+    isOnBoard,
+    isWhitePiece,
+} from "./utils";
 
 export function getPossibleMoves(
     piece: Piece,
@@ -104,6 +110,21 @@ function getPossibleKingMoves(
                 possibleMoves.push([r, c]);
             }
         }
+    }
+
+    const color = getPieceColor(piece);
+
+    console.log(
+        canCastleByBoard(board, color, "k"),
+        canCastleByBoard(board, color, "q"),
+    );
+
+    if (canCastleByBoard(board, color, "k")) {
+        possibleMoves.push([row, col + 3]);
+    }
+
+    if (canCastleByBoard(board, color, "q")) {
+        possibleMoves.push([row, col - 4]);
     }
 
     return possibleMoves;

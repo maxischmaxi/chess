@@ -6,16 +6,11 @@ import { Board } from "@/lib/field";
 import {
     boardToFen,
     createChessboard,
-    drawCell,
-    drawCircle,
-    drawDebugInfos,
-    drawImage,
-    drawStartCell,
-    drawThrow,
     getActivePlayer,
-    isBlackPiece,
-    isWhitePiece,
+    getPieceColor,
+    isMouseOverCell,
 } from "@/lib/utils";
+import { drawCell, drawImage, drawCastleCell, drawCircle } from "@/lib/drawing";
 import {
     createContext,
     Dispatch,
@@ -86,13 +81,13 @@ export function ChessProvider({ children }: { children: React.ReactNode }) {
         fenIndex: 0,
     });
     const moveSelf = useAudio(
-        "http://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/move-self.mp3",
+        "https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/move-self.mp3",
     );
     const notify = useAudio(
-        "http://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/notify.mp3",
+        "https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/notify.mp3",
     );
     const capture = useAudio(
-        "http://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/capture.mp3",
+        "https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/capture.mp3",
     );
     const [activePiece, setActivePiece] = useState<ActivePiece | null>(null);
 
@@ -231,6 +226,199 @@ export function ChessProvider({ children }: { children: React.ReactNode }) {
         }
     }
 
+    function renderCell(
+        baseContext: CanvasRenderingContext2D,
+        eventContext: CanvasRenderingContext2D,
+        row: number,
+        col: number,
+        cellSize: number,
+        mouseX: number,
+        mouseY: number,
+    ): void {
+        const piece = board.fields[row][col].piece;
+
+        drawCell(
+            baseContext,
+            row,
+            col,
+            cellSize,
+            board.fields[row][col],
+            activePiece,
+            true,
+        );
+
+        if (!piece) return;
+
+        const isActivePiece =
+            activePiece?.row === row && activePiece?.col === col;
+
+        if (isActivePiece) {
+            renderActivePiece(
+                baseContext,
+                eventContext,
+                piece,
+                row,
+                col,
+                cellSize,
+                mouseX,
+                mouseY,
+            );
+        } else {
+            renderStaticPiece(baseContext, piece, row, col, cellSize);
+        }
+    }
+
+    function renderStaticPiece(
+        context: CanvasRenderingContext2D,
+        piece: Piece,
+        row: number,
+        col: number,
+        cellSize: number,
+    ) {
+        const image = getImageByPiece(piece);
+        drawImage(context, image!, col * cellSize, row * cellSize, cellSize);
+    }
+
+    function renderBoard(
+        baseContext: CanvasRenderingContext2D,
+        eventContext: CanvasRenderingContext2D,
+        cellSize: number,
+        mouseX: number,
+        mouseY: number,
+    ) {
+        for (let row = 0; row < CHESSBOARD_SIZE; row++) {
+            for (let col = 0; col < CHESSBOARD_SIZE; col++) {
+                renderCell(
+                    baseContext,
+                    eventContext,
+                    row,
+                    col,
+                    cellSize,
+                    mouseX,
+                    mouseY,
+                );
+            }
+        }
+    }
+
+    function renderMoveCell(
+        baseContext: CanvasRenderingContext2D,
+        eventContext: CanvasRenderingContext2D,
+        row: number,
+        col: number,
+        cellSize: number,
+    ) {
+        const targetPiece = board.fields[row][col].piece;
+
+        if (!targetPiece) {
+            drawCircle(
+                baseContext,
+                col * cellSize,
+                row * cellSize,
+                cellSize,
+                3,
+            );
+            return;
+        }
+
+        if (board.activePlayer === getPieceColor(targetPiece)) {
+            drawCastleCell(eventContext, row, col, cellSize);
+        } else {
+            drawCircle(
+                baseContext,
+                col * cellSize,
+                row * cellSize,
+                cellSize,
+                5,
+                "rgba(255,0,0,0.5)",
+            );
+        }
+    }
+
+    function clearCanvases(
+        baseContext: CanvasRenderingContext2D,
+        eventContext: CanvasRenderingContext2D,
+    ) {
+        baseContext.clearRect(
+            0,
+            0,
+            baseContext.canvas.width,
+            baseContext.canvas.height,
+        );
+        eventContext.clearRect(
+            0,
+            0,
+            eventContext.canvas.width,
+            eventContext.canvas.height,
+        );
+    }
+
+    function renderPossibleMoves(
+        baseContext: CanvasRenderingContext2D,
+        eventContext: CanvasRenderingContext2D,
+        piece: Piece,
+        row: number,
+        col: number,
+        cellSize: number,
+        mouseX: number,
+        mouseY: number,
+    ) {
+        const possibleMoves = getPossibleMoves(piece, row, col, board.fields);
+        let nearest: number[] = [];
+
+        for (const [moveRow, moveCol] of possibleMoves) {
+            renderMoveCell(
+                baseContext,
+                eventContext,
+                moveRow,
+                moveCol,
+                cellSize,
+            );
+
+            if (isMouseOverCell(moveRow, moveCol, cellSize, mouseX, mouseY)) {
+                nearest = [moveRow, moveCol];
+            }
+        }
+
+        return nearest;
+    }
+
+    function renderActivePiece(
+        baseContext: CanvasRenderingContext2D,
+        eventContext: CanvasRenderingContext2D,
+        piece: Piece,
+        row: number,
+        col: number,
+        cellSize: number,
+        mouseX: number,
+        mouseY: number,
+    ) {
+        const nearest = renderPossibleMoves(
+            baseContext,
+            eventContext,
+            piece,
+            row,
+            col,
+            cellSize,
+            mouseX,
+            mouseY,
+        );
+
+        if (nearest.length) {
+            const [nearsetRow, nearestCol] = nearest;
+            drawCircle(
+                baseContext,
+                nearestCol * cellSize,
+                nearsetRow * cellSize,
+                cellSize,
+                4,
+            );
+        }
+
+        const image = getImageByPiece(piece);
+        drawImage(eventContext, image!, mouseX, mouseY, cellSize, activePiece);
+    }
+
     function render(
         baseCanvas: RefObject<HTMLCanvasElement | null>,
         eventCanvas: RefObject<HTMLCanvasElement | null>,
@@ -251,108 +439,16 @@ export function ChessProvider({ children }: { children: React.ReactNode }) {
         if (!baseContext) return;
         if (!eventContext) return;
 
-        eventContext.clearRect(
-            0,
-            0,
-            eventCanvas.current.width,
-            eventCanvas.current.height,
-        );
-
-        baseContext.clearRect(
-            0,
-            0,
-            baseCanvas.current.width,
-            baseCanvas.current.height,
-        );
-
         const cellSize = boardSize / CHESSBOARD_SIZE;
 
-        for (let r = 0; r < CHESSBOARD_SIZE; r++) {
-            for (let c = 0; c < CHESSBOARD_SIZE; c++) {
-                drawCell(baseContext, r, c, cellSize);
-                drawDebugInfos(baseContext, r, c, cellSize, board.fields[r][c]);
-
-                const piece = board.fields[r][c].piece;
-
-                if (!piece) {
-                    continue;
-                }
-
-                if (
-                    activePiece?.piece === piece &&
-                    activePiece?.row === r &&
-                    activePiece?.col === c &&
-                    mousePosition.x !== undefined &&
-                    mousePosition.y !== undefined &&
-                    ((isWhitePiece(piece) && board.activePlayer === "w") ||
-                        (isBlackPiece(piece) && board.activePlayer === "b"))
-                ) {
-                    console.log(
-                        "DRAGMOVE PIECE",
-                        piece,
-                        r,
-                        c,
-                        mousePosition.x,
-                        mousePosition.y,
-                    );
-                    drawStartCell(eventContext, r, c, cellSize);
-
-                    const possibleMoves = getPossibleMoves(
-                        piece,
-                        r,
-                        c,
-                        board.fields,
-                    );
-
-                    let nearest: number[] = [];
-
-                    for (const [row, col] of possibleMoves) {
-                        const x = col * cellSize;
-                        const y = row * cellSize;
-                        drawCircle(eventContext, x, y, cellSize, 2);
-
-                        if (board.fields[row][col].piece) {
-                            drawThrow(eventContext, x, y, cellSize);
-                        }
-
-                        if (
-                            mousePosition.x >= x &&
-                            mousePosition.x <= x + cellSize &&
-                            mousePosition.y >= y &&
-                            mousePosition.y <= y + cellSize
-                        ) {
-                            nearest = [row, col];
-                        }
-                    }
-
-                    if (nearest.length) {
-                        const x = nearest[1] * cellSize;
-                        const y = nearest[0] * cellSize;
-                        drawCircle(eventContext, x, y, cellSize, 4);
-                        drawThrow(eventContext, x, y, cellSize, 4);
-                    }
-
-                    const image = getImageByPiece(piece);
-                    drawImage(
-                        eventContext,
-                        image!,
-                        mousePosition.x,
-                        mousePosition.y,
-                        cellSize,
-                        activePiece,
-                    );
-                } else {
-                    const image = getImageByPiece(piece);
-                    drawImage(
-                        baseContext,
-                        image!,
-                        c * cellSize,
-                        r * cellSize,
-                        cellSize,
-                    );
-                }
-            }
-        }
+        clearCanvases(baseContext, eventContext);
+        renderBoard(
+            baseContext,
+            eventContext,
+            cellSize,
+            mousePosition.x,
+            mousePosition.y,
+        );
     }
 
     return (
