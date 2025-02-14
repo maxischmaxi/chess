@@ -24,20 +24,12 @@ export function useSize(ref: RefObject<HTMLElement | null>) {
 
         size();
 
-        if (typeof window === undefined) {
-            return;
-        }
-
         window.addEventListener("resize", size);
         window.addEventListener("load", size);
         window.addEventListener("scroll", size);
         window.addEventListener("orientationchange", size);
 
         return () => {
-            if (typeof window === undefined) {
-                return;
-            }
-
             window.removeEventListener("resize", size);
             window.removeEventListener("load", size);
             window.removeEventListener("scroll", size);

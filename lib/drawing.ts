@@ -1,3 +1,4 @@
+import { CHESSBOARD_SIZE } from "./definitions";
 import { Chessfield } from "./field";
 import { palette } from "./palette";
 import { ActivePiece } from "./pieces";
@@ -34,7 +35,9 @@ export function drawCell(
     cellSize: number,
     field: Chessfield,
     activePiece: ActivePiece | null,
+    lastMoves: { row: number; col: number }[] = [],
     debug: boolean = false,
+    selectedFields: { row: number; col: number }[] = [],
 ): void {
     const isBlackField = (r + c) % 2 === 0;
     let fillstyle = isBlackField ? palette.dark : palette.light;
@@ -43,11 +46,22 @@ export function drawCell(
         fillstyle = palette.active;
     }
 
+    if (
+        lastMoves.length <= 2 &&
+        lastMoves.some((move) => move.row === r && move.col === c)
+    ) {
+        fillstyle = palette.active;
+    }
+
+    if (selectedFields.some((field) => field.row === r && field.col === c)) {
+        fillstyle = palette.selected;
+    }
+
     context.fillStyle = fillstyle;
     context.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
 
     if (debug) {
-        context.fillStyle = "black";
+        context.fillStyle = "rgba(255,255,255,0.5)";
         context.font = "12px sans-serif";
         context.fillText(`${c},${r}`, c * cellSize + 10, r * cellSize + 20);
 
@@ -64,8 +78,8 @@ export function drawCircle(
     x: number,
     y: number,
     cellSize: number,
-    lineWidth: number = 1,
-    color: string = "rgba(0,0,0,0.5)",
+    lineWidth: number = 2,
+    color: string = "rgba(255,255,255,0.5)",
 ) {
     context.strokeStyle = color;
     context.lineWidth = lineWidth;
@@ -132,4 +146,56 @@ export function drawCastleCell(
 ): void {
     context.fillStyle = "rgba(0, 0, 255, 0.5)";
     context.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+}
+
+export function drawVerticalLine(
+    context: CanvasRenderingContext2D,
+    cellSize: number,
+    index: number,
+): void {
+    if (index === 0) return;
+    const grad = context.createLinearGradient(
+        index * cellSize,
+        0,
+        index * cellSize,
+        cellSize * CHESSBOARD_SIZE,
+    );
+    grad.addColorStop(0, "rgba(255 255 255 / 0%)");
+    grad.addColorStop(0.3, "rgba(255 255 255 / 80%)");
+    grad.addColorStop(0.5, "rgba(255 255 255 / 100%)");
+    grad.addColorStop(0.8, "rgba(255 255 255 / 80%)");
+    grad.addColorStop(1, "rgba(255 255 255 / 0%)");
+
+    context.strokeStyle = grad;
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(index * cellSize, 0);
+    context.lineTo(index * cellSize, cellSize * CHESSBOARD_SIZE);
+    context.stroke();
+}
+
+export function drawHorizontalLine(
+    context: CanvasRenderingContext2D,
+    cellSize: number,
+    index: number,
+): void {
+    if (index === 0) return;
+    const grad = context.createLinearGradient(
+        0,
+        index * cellSize,
+        cellSize * CHESSBOARD_SIZE,
+        index * cellSize,
+    );
+    grad.addColorStop(0, "rgba(255 255 255 / 0%)");
+    grad.addColorStop(0.3, "rgba(255 255 255 / 80%)");
+    grad.addColorStop(0.5, "rgba(255 255 255 / 100%)");
+    grad.addColorStop(0.8, "rgba(255 255 255 / 80%)");
+    grad.addColorStop(1, "rgba(255 255 255 / 0%)");
+
+    context.strokeStyle = grad;
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(0, index * cellSize);
+    context.lineTo(cellSize * CHESSBOARD_SIZE, index * cellSize);
+    context.stroke();
 }

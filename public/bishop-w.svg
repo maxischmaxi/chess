@@ -1,15 +1,6 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!--
-	Futó (fehér)
-	Eredeti: http://en.wikipedia.org/wiki/File:Chess_blt45.svg
-	Felhasználási feltételek: Nevezd meg! - Így add tovább! (Creative Commons)
-	Uray M. János
-	2013-2018
--->
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
 <svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="128" height="128" viewBox="0 0 45 45">
 	<!-- alap -->
-	<g fill="#FFF" stroke="#000" stroke-width="1.5" stroke-linejoin="round">
+	<g fill="rgb(240,240,240)" stroke="#000" stroke-width="1.5" stroke-linejoin="round">
 		<!-- bojt -->
 		<circle cx="22.5" cy="8" r="2.5"/>
 		<!-- test -->

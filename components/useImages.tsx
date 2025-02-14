@@ -4,7 +4,7 @@ import { Piece } from "@/lib/pieces";
 import { useImage } from "../hooks/useImage";
 import { createContext, useEffect, useState } from "react";
 
-type IUseImages = {
+export type IUseImages = {
     ready: boolean;
     bishopB: { image: HTMLImageElement | null; ready: boolean };
     bishopW: { image: HTMLImageElement | null; ready: boolean };

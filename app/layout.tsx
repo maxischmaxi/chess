@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import dynamic from "next/dynamic";
+import { AudioProvider } from "@/components/audio-provider";
 
 const StockfishProvider = dynamic(() =>
     import("@/components/stockfish-provider").then(
@@ -13,9 +14,7 @@ const StockfishProvider = dynamic(() =>
 const ImagesProvider = dynamic(() =>
     import("@/components/images-provider").then((mod) => mod.ImagesProvider),
 );
-const ChessProvider = dynamic(() =>
-    import("@/components/chess-provider").then((mod) => mod.ChessProvider),
-);
+
 const ThemeProvider = dynamic(() =>
     import("@/components/theme-provider").then((mod) => mod.ThemeProvider),
 );
@@ -45,23 +44,23 @@ export default function RootLayout({
             <body
                 className={`${geistSans.variable} ${geistMono.variable} antialiased`}
             >
-                <ImagesProvider>
-                    <StockfishProvider>
-                        <ThemeProvider
-                            attribute="class"
-                            defaultTheme="system"
-                            enableSystem
-                            disableTransitionOnChange
-                        >
-                            <SidebarProvider>
-                                <ChessProvider>
+                <AudioProvider>
+                    <ImagesProvider>
+                        <StockfishProvider>
+                            <ThemeProvider
+                                attribute="class"
+                                defaultTheme="system"
+                                enableSystem
+                                disableTransitionOnChange
+                            >
+                                <SidebarProvider>
                                     <AppSidebar />
                                     <SidebarInset>{children}</SidebarInset>
-                                </ChessProvider>
-                            </SidebarProvider>
-                        </ThemeProvider>
-                    </StockfishProvider>
-                </ImagesProvider>
+                                </SidebarProvider>
+                            </ThemeProvider>
+                        </StockfishProvider>
+                    </ImagesProvider>
+                </AudioProvider>
             </body>
         </html>
     );
