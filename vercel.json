@@ -1,7 +1,0 @@
-{
-    "functions": {
-        "api/stockfish": {
-            "includeFiles": "stockfish.js"
-        }
-    }
-}
