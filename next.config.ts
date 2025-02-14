@@ -1,9 +1,5 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-    outputFileTracingIncludes: {
-        "/api/stockfish": ["./stockfish.js"],
-    },
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;

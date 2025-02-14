@@ -45,7 +45,7 @@ export function StockfishProvider({ children }: { children: React.ReactNode }) {
             workerRef.current.terminate();
         }
 
-        const worker = new Worker("/api/stockfish");
+        const worker = new Worker("/stockfish.js");
         workerRef.current = worker;
 
         worker.onmessage = function (event: MessageEvent) {
