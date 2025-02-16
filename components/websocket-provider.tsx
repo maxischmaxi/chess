@@ -1,6 +1,8 @@
 "use client";
+
 import { WebsocketMessage } from "@/lib/definitions";
-import { useEffect, useRef, useState } from "react";
+import { useParams } from "next/navigation";
+import { createContext, ReactNode, useEffect, useRef, useState } from "react";
 
 type EventDetailMap = {
     onMove: string;
@@ -19,10 +21,32 @@ type ListenerMap = {
     [K in keyof EventDetailMap]: Array<(event: EventDetailMap[K]) => void>;
 };
 
-const protocol = process.env.NODE_ENV === "development" ? "ws" : "wss";
-const baseUrl = `${protocol}://${process.env.PUBLIC_API_GATEWAY}/ws`;
+type IUseWebsocket = {
+    addEventListener<K extends keyof EventDetailMap>(
+        event: K,
+        listener: (event: EventDetailMap[K]) => void,
+    ): void;
+    removeEventListener<K extends keyof EventDetailMap>(
+        event: K,
+        listener: (event: EventDetailMap[K]) => void,
+    ): void;
+    sendMove(gameId: string, move: string, color: "w" | "b"): void;
+};
 
-export function useWebsocket(gameId: string) {
+type WebsocketProviderProps = {
+    children?: ReactNode;
+};
+
+const protocol = process.env.NODE_ENV === "development" ? "ws" : "wss";
+const baseUrl = `${protocol}://${process.env.NEXT_PUBLIC_API_GATEWAY}/ws`;
+
+export const WebsocketContext = createContext<IUseWebsocket>({
+    addEventListener() {},
+    removeEventListener() {},
+    sendMove() {},
+});
+
+export function WebsocketProvider({ children }: WebsocketProviderProps) {
     const socket = useRef<WebSocket | null>(null);
     const listeners = useRef<ListenerMap>({
         onMove: [],
@@ -36,29 +60,54 @@ export function useWebsocket(gameId: string) {
         onClose: [],
         onAgainst: [],
     });
-    const [id, setId] = useState<string | null>(
-        localStorage.getItem("id") || null,
-    );
+    const { gameId = "" } = useParams();
+    const [connected, setConnected] = useState(false);
+    const [gotHello, setGotHello] = useState(false);
 
     useEffect(() => {
-        const url = `${baseUrl}?id=${localStorage.getItem("id") || ""}`;
-        socket.current = new WebSocket(url);
+        if (!connected) return;
+        if (!gotHello) return;
+
+        if (gameId) {
+            const message: WebsocketMessage = {
+                type: "join",
+                payload: JSON.stringify({ gameId }),
+            };
+
+            if (socket.current?.readyState === WebSocket.OPEN) {
+                socket.current?.send(JSON.stringify(message));
+            }
+            return;
+        }
+
+        const message: WebsocketMessage = {
+            type: "leave",
+            payload: "",
+        };
+
+        if (socket.current?.readyState === WebSocket.OPEN) {
+            socket.current?.send(JSON.stringify(message));
+        }
+    }, [connected, gameId, gotHello]);
+
+    useEffect(() => {
+        console.log("Connecting to websocket");
+        socket.current = new WebSocket(
+            `${baseUrl}?id=${localStorage.getItem("id") || ""}`,
+        );
 
         socket.current.onopen = () => {
             listeners.current.onConnect.forEach((listener) =>
                 listener(undefined),
             );
-
-            const id = localStorage.getItem("id");
-            if (id) {
-                setId(id);
-            }
+            setConnected(true);
         };
 
         socket.current.onclose = () => {
             listeners.current.onDisconnect.forEach((listener) =>
                 listener(undefined),
             );
+            setConnected(false);
         };
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -117,16 +166,8 @@ export function useWebsocket(gameId: string) {
                 case "hello": {
                     const { id } = payload;
                     localStorage.setItem("id", id);
-                    setId(id);
+                    setGotHello(true);
 
-                    const message: WebsocketMessage = {
-                        type: "join",
-                        payload: JSON.stringify({ gameId }),
-                    };
-
-                    if (socket.current?.readyState === WebSocket.OPEN) {
-                        socket.current?.send(JSON.stringify(message));
-                    }
                     break;
                 }
                 case "move": {
@@ -142,18 +183,9 @@ export function useWebsocket(gameId: string) {
         };
 
         return () => {
-            const message: WebsocketMessage = {
-                type: "leave",
-                payload: JSON.stringify({ gameId }),
-            };
-
-            if (socket.current?.readyState === WebSocket.OPEN) {
-                socket.current?.send(JSON.stringify(message));
-            }
-
             socket.current?.close();
         };
-    }, [gameId]);
+    }, []);
 
     function addEventListener<K extends keyof EventDetailMap>(
         type: K,
@@ -190,10 +222,15 @@ export function useWebsocket(gameId: string) {
         }
     }
 
-    return {
-        addEventListener,
-        removeEventListener,
-        sendMove,
-        id,
-    };
+    return (
+        <WebsocketContext.Provider
+            value={{
+                addEventListener,
+                removeEventListener,
+                sendMove,
+            }}
+        >
+            {children}
+        </WebsocketContext.Provider>
+    );
 }

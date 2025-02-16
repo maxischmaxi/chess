@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import dynamic from "next/dynamic";
 import { AudioProvider } from "@/components/audio-provider";
+import { WebsocketProvider } from "@/components/websocket-provider";
 
 const ImagesProvider = dynamic(() =>
     import("@/components/images-provider").then((mod) => mod.ImagesProvider),
@@ -37,18 +38,20 @@ export default function RootLayout({
             <body
                 className={`${geistSans.variable} ${geistMono.variable} antialiased`}
             >
-                <AudioProvider>
-                    <ImagesProvider>
-                        <ThemeProvider
-                            attribute="class"
-                            defaultTheme="system"
-                            enableSystem
-                            disableTransitionOnChange
-                        >
-                            {children}
-                        </ThemeProvider>
-                    </ImagesProvider>
-                </AudioProvider>
+                <WebsocketProvider>
+                    <AudioProvider>
+                        <ImagesProvider>
+                            <ThemeProvider
+                                attribute="class"
+                                defaultTheme="system"
+                                enableSystem
+                                disableTransitionOnChange
+                            >
+                                {children}
+                            </ThemeProvider>
+                        </ImagesProvider>
+                    </AudioProvider>
+                </WebsocketProvider>
             </body>
         </html>
     );

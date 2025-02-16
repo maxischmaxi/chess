@@ -21,7 +21,6 @@ import {
 import { WinProbability } from "./winprobabilty";
 import { ChessAudioConext } from "./audio-provider";
 import { ImagesContext } from "./images-provider";
-import { useWebsocket } from "@/hooks/useWebsocket";
 import { useStockfish } from "@/hooks/useStockfish";
 import { Button } from "./ui/button";
 import {
@@ -33,6 +32,7 @@ import {
     DialogTitle,
 } from "./ui/dialog";
 import { CreateGameButton } from "./create-game-button";
+import { WebsocketContext } from "./websocket-provider";
 
 type Props = {
     fens: string[];
@@ -56,7 +56,7 @@ export function Chessboard(props: Props) {
     const mouseY = useRef(0);
     const audio = use(ChessAudioConext);
     const stockfish = useStockfish();
-    const websocket = useWebsocket(props.gameId);
+    const websocket = use(WebsocketContext);
     const [againstAi, setAgainstAi] = useState(false);
     const iAm = useRef<"w" | "b">("w");
     const possibleMoves = useRef<string[]>([]);
