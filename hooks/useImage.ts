@@ -1,6 +1,6 @@
 "use client";
 
-import { Piece } from "@/lib/pieces";
+import { Piece } from "@/lib/definitions";
 import { getPieceImage } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 
