@@ -1,8 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { ActivePiece, Piece } from "./pieces";
-import { Chessfield } from "./field";
-import { IUseImages } from "@/components/useImages";
+import { Chessfield, Piece } from "./definitions";
+import { IUseImages } from "@/components/images-provider";
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -62,43 +61,41 @@ export function createChessboard(fen: string): Chessfield[][] {
             "FEN ungültig oder unvollständig (es müssen 8 Ranks sein).",
         );
     }
-    const board: Chessfield[][] = [];
 
-    for (let row = 0; row < 8; row++) {
-        const rankStr = ranks[row];
-        const numberLabelForRow = (8 - row).toString();
-        const rankFields: Chessfield[] = [];
+    const board: Chessfield[][] = [[], [], [], [], [], [], [], []];
 
+    for (let row = 7; row >= 0; row--) {
         let col = 0;
-        for (const ch of rankStr) {
-            if (/\d/.test(ch)) {
-                const emptyCount = parseInt(ch, 10);
-                for (let i = 0; i < emptyCount; i++) {
-                    rankFields.push(
-                        createField(row, col, numberLabelForRow, undefined),
+        for (let i = 0; i < ranks[row].length; i++) {
+            const ch = ranks[row][i];
+            if (ch >= "1" && ch <= "8") {
+                const emptySquares = parseInt(ch, 10);
+                for (let j = 0; j < emptySquares; j++) {
+                    board[row].push(
+                        createField(
+                            row,
+                            col++,
+                            `${String.fromCharCode("a".charCodeAt(0) + col - 1)}${8 - row}`,
+                        ),
                     );
-                    col++;
                 }
             } else {
                 const piece = parseFenChar(ch);
-                rankFields.push(
-                    createField(row, col, numberLabelForRow, piece),
+                if (piece === undefined) {
+                    throw new Error(
+                        `Ungültiges Zeichen in FEN: ${ch} in Rank ${row}`,
+                    );
+                }
+                board[row].push(
+                    createField(
+                        row,
+                        col++,
+                        `${String.fromCharCode("a".charCodeAt(0) + col - 1)}${8 - row}`,
+                        piece,
+                    ),
                 );
-                col++;
-            }
-
-            if (col > 8) {
-                throw new Error(`FEN Zeile ${row + 1} hat zu viele Spalten.`);
             }
         }
-
-        if (col !== 8) {
-            throw new Error(
-                `FEN Zeile ${row + 1} hat zu wenige Spalten (Spalten=${col}).`,
-            );
-        }
-
-        board.push(rankFields);
     }
 
     return board;
@@ -110,20 +107,17 @@ function createField(
     numberLabel: string,
     piece?: Piece,
 ): Chessfield {
-    const letterLabel = String.fromCharCode("a".charCodeAt(0) + col);
     const color = (row + col) % 2 === 0 ? "white" : "black";
 
     return {
         color,
         numberLabel,
-        letterLabel,
         piece,
     };
 }
 
 function parseFenChar(ch: string): Piece | undefined {
     switch (ch) {
-        // Weiße Figuren (Großbuchstaben)
         case "P":
             return Piece.WhitePawn;
         case "N":
@@ -136,8 +130,6 @@ function parseFenChar(ch: string): Piece | undefined {
             return Piece.WhiteQueen;
         case "K":
             return Piece.WhiteKing;
-
-        // Schwarze Figuren (Kleinbuchstaben)
         case "p":
             return Piece.BlackPawn;
         case "n":
@@ -209,44 +201,6 @@ export function isMouseOverCell(
     );
 }
 
-export function canExecuteMove(
-    activePiece: ActivePiece | null,
-    piece: Piece,
-    activePlayer: "w" | "b",
-): boolean {
-    if (activePiece?.piece !== piece) {
-        return false;
-    }
-
-    if (isWhitePiece(piece) && activePlayer === "w") {
-        return true;
-    }
-
-    if (isBlackPiece(piece) && activePlayer === "b") {
-        return true;
-    }
-
-    return false;
-}
-
-export function capturedPiece(
-    prevFields: Chessfield[][],
-    nextFields: Chessfield[][],
-): Piece | null {
-    for (let row = 0; row < 8; row++) {
-        for (let col = 0; col < 8; col++) {
-            const prevPiece = prevFields[row][col].piece;
-            const nextPiece = nextFields[row][col].piece;
-
-            if (prevPiece && !nextPiece) {
-                return prevPiece;
-            }
-        }
-    }
-
-    return null;
-}
-
 export function evaluationToWinProbability(evalCp: number) {
     const MAX_EVAL = 10000;
     if (evalCp > MAX_EVAL) {
@@ -258,270 +212,6 @@ export function evaluationToWinProbability(evalCp: number) {
 
     const exponent = -evalCp / 400;
     return 1 / (1 + Math.pow(10, exponent));
-}
-
-export function generateCastleFen(
-    fromRow: number,
-    fromCol: number,
-    toRow: number,
-    toCol: number,
-    fens: string[],
-    fenIndex: number,
-): string {
-    // 1. Altes FEN aus dem Array holen
-    const currentFen = fens[fenIndex];
-    const activePlayer = getActivePlayer(currentFen);
-
-    // Ein FEN besteht normalerweise aus 6 Teilen:
-    // [0]: Stellung der Figuren (8 Reihen, durch '/' getrennt)
-    // [1]: Seite am Zug ("w" oder "b")
-    // [2]: Rochaderechte (z.B. "KQkq" oder "-")
-    // [3]: En-passant-Feld (z.B. "e3" oder "-")
-    // [4]: Halbzüge seit letztem Bauernzug/Schlag (Number)
-    // [5]: Vollzugzähler (Number)
-    const fenParts = currentFen.split(" ");
-    if (fenParts.length !== 6) {
-        throw new Error("Ungültiges FEN-Format");
-    }
-
-    const [
-        piecePlacement,
-        activeColor,
-        castling,
-        enPassant,
-        halfmoveClock,
-        fullmoveNumber,
-    ] = fenParts;
-
-    // 2. Board aus dem 'piecePlacement' in ein 2D-Array (8x8) umwandeln
-    //    Reihenfolge in FEN: Reihe 8 (oben) bis Reihe 1 (unten)
-    //    -> piecePlacement.split('/')[0] = oberste Reihe
-    const rows = piecePlacement.split("/");
-    if (rows.length !== 8) {
-        throw new Error("Ungültige Anzahl von Reihen im FEN");
-    }
-
-    // Parsing jeder FEN-Reihe: Ziffern stehen für Anzahl leerer Felder, Buchstaben für Figuren
-    const board = rows.map((row) => {
-        const expandedRow: string[] = [];
-        for (const char of row) {
-            if (/\d/.test(char)) {
-                const emptyCount = parseInt(char, 10);
-                for (let i = 0; i < emptyCount; i++) {
-                    expandedRow.push(""); // leeres Feld
-                }
-            } else {
-                expandedRow.push(char); // Figur-Symbol (z.B. 'p', 'P', 'r', etc.)
-            }
-        }
-        if (expandedRow.length !== 8) {
-            throw new Error("Ungültige Reihenlänge nach Parsing");
-        }
-        return expandedRow;
-    });
-
-    if (fromRow === 0 && fromCol === 4 && toRow === 0 && toCol === 6) {
-        board[0][7] = "";
-        board[0][5] = activePlayer === "w" ? "R" : "r";
-    } else if (fromRow === 0 && fromCol === 4 && toRow === 0 && toCol === 2) {
-        board[0][0] = "";
-        board[0][3] = activePlayer === "w" ? "R" : "r";
-    } else if (fromRow === 7 && fromCol === 4 && toRow === 7 && toCol === 7) {
-        board[7][7] = "";
-        board[7][4] = "";
-        board[7][5] = activePlayer === "w" ? "R" : "r";
-        board[7][6] = activePlayer === "w" ? "K" : "k";
-    } else if (fromRow === 7 && fromCol === 4 && toRow === 7 && toCol === 0) {
-        board[7][0] = "";
-        board[7][1] = "";
-        board[7][2] = activePlayer === "w" ? "K" : "k";
-        board[7][3] = activePlayer === "w" ? "R" : "r";
-        board[7][4] = "";
-    } else {
-        throw new Error("Ungültiger Rochade-Zug");
-    }
-
-    // 4. Aktualisierung der Rochaderechte
-    let newCastling = castling;
-    if (activeColor === "w") {
-        newCastling = newCastling.replace("K", "");
-        newCastling = newCastling.replace("Q", "");
-    } else {
-        newCastling = newCastling.replace("k", "");
-        newCastling = newCastling.replace("q", "");
-    }
-
-    // 5. Neues Piece-Placement als FEN-Teil generieren
-    const newPiecePlacement = board
-        .map((row) => {
-            let fenRow = "";
-            let emptyCount = 0;
-            for (let col = 0; col < 8; col++) {
-                const cell = row[col];
-                if (cell === "") {
-                    emptyCount++;
-                } else {
-                    if (emptyCount > 0) {
-                        fenRow += emptyCount;
-                        emptyCount = 0;
-                    }
-                    fenRow += cell;
-                }
-            }
-            // Falls am Ende der Reihe noch Leerfelder offen sind, anhängen
-            if (emptyCount > 0) {
-                fenRow += emptyCount;
-            }
-            return fenRow;
-        })
-        .join("/");
-
-    // 6. Kompletter FEN-String zusammenbauen
-    const newFen = [
-        newPiecePlacement,
-        activeColor,
-        newCastling,
-        enPassant,
-        halfmoveClock,
-        fullmoveNumber,
-    ].join(" ");
-
-    return newFen;
-}
-
-export function generateFen(
-    fromRow: number,
-    fromCol: number,
-    toRow: number,
-    toCol: number,
-    fens: string[],
-    fenIndex: number,
-): string {
-    // 1. Altes FEN aus dem Array holen
-    const currentFen = fens[fenIndex];
-
-    // Ein FEN besteht normalerweise aus 6 Teilen:
-    // [0]: Stellung der Figuren (8 Reihen, durch '/' getrennt)
-    // [1]: Seite am Zug ("w" oder "b")
-    // [2]: Rochaderechte (z.B. "KQkq" oder "-")
-    // [3]: En-passant-Feld (z.B. "e3" oder "-")
-    // [4]: Halbzüge seit letztem Bauernzug/Schlag (Number)
-    // [5]: Vollzugzähler (Number)
-    const fenParts = currentFen.split(" ");
-    if (fenParts.length !== 6) {
-        throw new Error("Ungültiges FEN-Format");
-    }
-
-    const [
-        piecePlacement,
-        activeColor,
-        castling,
-        enPassant,
-        halfmoveClock,
-        fullmoveNumber,
-    ] = fenParts;
-
-    // 2. Board aus dem 'piecePlacement' in ein 2D-Array (8x8) umwandeln
-    //    Reihenfolge in FEN: Reihe 8 (oben) bis Reihe 1 (unten)
-    //    -> piecePlacement.split('/')[0] = oberste Reihe
-    const rows = piecePlacement.split("/");
-    if (rows.length !== 8) {
-        throw new Error("Ungültige Anzahl von Reihen im FEN");
-    }
-
-    // Parsing jeder FEN-Reihe: Ziffern stehen für Anzahl leerer Felder, Buchstaben für Figuren
-    const board = rows.map((row) => {
-        const expandedRow: string[] = [];
-        for (const char of row) {
-            if (/\d/.test(char)) {
-                const emptyCount = parseInt(char, 10);
-                for (let i = 0; i < emptyCount; i++) {
-                    expandedRow.push(""); // leeres Feld
-                }
-            } else {
-                expandedRow.push(char); // Figur-Symbol (z.B. 'p', 'P', 'r', etc.)
-            }
-        }
-        if (expandedRow.length !== 8) {
-            throw new Error("Ungültige Reihenlänge nach Parsing");
-        }
-        return expandedRow;
-    });
-
-    // 3. Zug ausführen: Figur von (fromRow, fromCol) nach (toRow, toCol) verschieben
-    //    Beachte, dass fromRow=0 die oberste Reihe (board[0]) ist und fromCol=0 die linke Spalte.
-    const piece = board[fromRow][fromCol];
-    if (!piece) {
-        throw new Error("Keine Figur auf dem angegebenen Startfeld vorhanden");
-    }
-
-    // Um festzustellen, ob ein Schlag oder Bauer-Zug stattfindet, merken wir uns vorher den Inhalt des Zielfeldes:
-    const targetSquareBeforeMove = board[toRow][toCol];
-
-    // Figur verschieben
-    board[fromRow][fromCol] = "";
-    board[toRow][toCol] = piece;
-
-    // 4. Aktualisierung der Schach-Uhr-Felder
-    //    a) Halbzugzähler (halfmoveClock):
-    //       - reset auf 0, wenn ein Bauer zieht oder eine Figur geschlagen wird
-    //       - sonst +1
-    let newHalfmoveClock = parseInt(halfmoveClock, 10);
-    const isPawnMove = piece.toLowerCase() === "p";
-    const isCapture = targetSquareBeforeMove !== "";
-    if (isPawnMove || isCapture) {
-        newHalfmoveClock = 0;
-    } else {
-        newHalfmoveClock++;
-    }
-
-    //    b) Vollzugzähler (fullmoveNumber) wird inkrementiert, sobald Schwarz gezogen hat
-    let newFullmoveNumber = parseInt(fullmoveNumber, 10);
-    // Wenn gerade "w" am Zug war und jetzt "b" wird, wird der Vollzugzähler NICHT inkrementiert
-    // Wenn gerade "b" am Zug war und es wird wieder "w", dann +1
-    if (activeColor === "b") {
-        newFullmoveNumber++;
-    }
-
-    // 5. Seite am Zug wechseln
-    const newActiveColor = activeColor === "w" ? "b" : "w";
-
-    // 6. Neues Piece-Placement als FEN-Teil generieren
-    const newPiecePlacement = board
-        .map((row) => {
-            let fenRow = "";
-            let emptyCount = 0;
-            for (let col = 0; col < 8; col++) {
-                const cell = row[col];
-                if (cell === "") {
-                    emptyCount++;
-                } else {
-                    if (emptyCount > 0) {
-                        fenRow += emptyCount;
-                        emptyCount = 0;
-                    }
-                    fenRow += cell;
-                }
-            }
-            // Falls am Ende der Reihe noch Leerfelder offen sind, anhängen
-            if (emptyCount > 0) {
-                fenRow += emptyCount;
-            }
-            return fenRow;
-        })
-        .join("/");
-
-    // 7. Kompletter FEN-String zusammenbauen
-    const newFen = [
-        newPiecePlacement,
-        newActiveColor,
-        castling,
-        enPassant,
-        newHalfmoveClock,
-        newFullmoveNumber,
-    ].join(" ");
-
-    return newFen;
 }
 
 export function getImageByPiece(piece: Piece, images: IUseImages) {
@@ -567,4 +257,34 @@ export function isCastleMove(
         (fromRow === 7 && fromCol === 4 && toRow === 7 && toCol === 7) ||
         (fromRow === 7 && fromCol === 4 && toRow === 7 && toCol === 0)
     );
+}
+
+export function moveToUciNotation(
+    fromRow: number,
+    fromCol: number,
+    toRow: number,
+    toCol: number,
+    isCastle: boolean,
+    piece: string = "",
+): string {
+    if (isCastle) {
+        if (fromRow === 0 && fromCol === 4 && toRow === 0 && toCol === 6) {
+            return "e8g8";
+        }
+        if (fromRow === 0 && fromCol === 4 && toRow === 0 && toCol === 2) {
+            return "e8c8";
+        }
+        if (fromRow === 7 && fromCol === 4 && toRow === 7 && toCol === 7) {
+            return "e1g1";
+        }
+        if (fromRow === 7 && fromCol === 4 && toRow === 7 && toCol === 0) {
+            return "e1c1";
+        }
+    }
+
+    const colString = String.fromCharCode("a".charCodeAt(0) + fromCol);
+    const targetColString = String.fromCharCode("a".charCodeAt(0) + toCol);
+    const targetString = `${targetColString}${8 - toRow}`;
+    const move = `${colString}${8 - fromRow}${targetString}`;
+    return move + piece;
 }

@@ -1,7 +1,9 @@
-import { CHESSBOARD_SIZE } from "./definitions";
-import { Chessfield } from "./field";
-import { palette } from "./palette";
-import { ActivePiece } from "./pieces";
+import {
+    ActivePiece,
+    CHESSBOARD_SIZE,
+    Chessfield,
+    palette,
+} from "./definitions";
 
 // TODO: throw wird noch nicht gezeichnet, ka warum
 export function drawThrow(
@@ -30,45 +32,59 @@ export function drawThrow(
 
 export function drawCell(
     context: CanvasRenderingContext2D,
-    r: number,
-    c: number,
+    row: number,
+    col: number,
     cellSize: number,
     field: Chessfield,
     activePiece: ActivePiece | null,
     lastMoves: { row: number; col: number }[] = [],
     debug: boolean = false,
     selectedFields: { row: number; col: number }[] = [],
+    iAm: "w" | "b",
+    flipped: boolean,
 ): void {
-    const isBlackField = (r + c) % 2 === 0;
+    const isBlackField = (row + col) % 2 === 0;
     let fillstyle = isBlackField ? palette.dark : palette.light;
 
-    if (activePiece && activePiece.row === r && activePiece.col === c) {
-        fillstyle = palette.active;
+    if (activePiece) {
+        const flip = iAm === "b" || flipped;
+        const displayRow = !flip ? row : 7 - row;
+        const displayCol = !flip ? col : 7 - col;
+
+        if (activePiece.row === displayRow && activePiece.col === displayCol) {
+            fillstyle = palette.active;
+        }
     }
 
     if (
         lastMoves.length <= 2 &&
-        lastMoves.some((move) => move.row === r && move.col === c)
+        lastMoves.some((move) => move.row === row && move.col === col)
     ) {
         fillstyle = palette.active;
     }
 
-    if (selectedFields.some((field) => field.row === r && field.col === c)) {
+    if (
+        selectedFields.some((field) => field.row === row && field.col === col)
+    ) {
         fillstyle = palette.selected;
     }
 
     context.fillStyle = fillstyle;
-    context.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+    context.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
 
     if (debug) {
         context.fillStyle = "rgba(255,255,255,0.5)";
         context.font = "12px sans-serif";
-        context.fillText(`${c},${r}`, c * cellSize + 10, r * cellSize + 20);
+        context.fillText(
+            `${col},${row}`,
+            col * cellSize + 10,
+            row * cellSize + 20,
+        );
 
         context.fillText(
-            `${field.letterLabel}${field.numberLabel}`,
-            c * cellSize + 10,
-            r * cellSize + 35,
+            `${field.numberLabel}`,
+            col * cellSize + 10,
+            row * cellSize + 35,
         );
     }
 }
@@ -93,23 +109,6 @@ export function drawCircle(
     );
     context.stroke();
     context.closePath();
-}
-
-export function drawImage(
-    context: CanvasRenderingContext2D,
-    img: HTMLImageElement,
-    mouseX: number,
-    mouseY: number,
-    cellSize: number,
-    activePiece?: ActivePiece | undefined | null,
-): void {
-    context.drawImage(
-        img,
-        mouseX - (activePiece?.grabPoint.x || 0),
-        mouseY - (activePiece?.grabPoint.y || 0),
-        cellSize,
-        cellSize,
-    );
 }
 
 export function drawArrow(

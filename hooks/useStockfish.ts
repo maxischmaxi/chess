@@ -1,44 +1,21 @@
-"use client";
-
-import { createContext, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type EventDetailMap = {
     bestMove: { from: string; to: string };
-    ready: undefined;
     score: { cp: number };
-};
-
-type IUseStockfish = {
-    calcBestMove(fen: string): void;
-    newGame(): void;
-    addEventListener<T extends keyof EventDetailMap>(
-        type: T,
-        listener: (event: EventDetailMap[T]) => void,
-    ): void;
-    removeEventListener<K extends keyof EventDetailMap>(
-        type: K,
-        listener: (event: EventDetailMap[K]) => void,
-    ): void;
 };
 
 type ListenerMap = {
     [K in keyof EventDetailMap]: Array<(event: EventDetailMap[K]) => void>;
 };
 
-export const StockfishContext = createContext<IUseStockfish>({
-    calcBestMove() {},
-    removeEventListener() {},
-    addEventListener() {},
-    newGame() {},
-});
-
-export function StockfishProvider({ children }: { children: React.ReactNode }) {
+export function useStockfish() {
     const workerRef = useRef<Worker | null>(null);
     const listeners = useRef<ListenerMap>({
         score: [],
-        ready: [],
         bestMove: [],
     });
+    const [ready, setReady] = useState(false);
 
     useEffect(() => {
         if (workerRef.current) {
@@ -50,15 +27,13 @@ export function StockfishProvider({ children }: { children: React.ReactNode }) {
 
         worker.onmessage = function (event: MessageEvent) {
             if (event.data === "readyok") {
-                for (const listener of listeners.current.ready || []) {
-                    listener(undefined);
-                }
+                setReady(true);
             }
 
             const bestMoveMatch = event.data.match(/bestmove\s+(\S+)/);
             if (bestMoveMatch) {
                 const from = bestMoveMatch[1].slice(0, 2);
-                const to = bestMoveMatch[1].slice(2, 4);
+                const to = bestMoveMatch[1].slice(2, bestMoveMatch[1].length);
 
                 for (const listener of listeners.current.bestMove || []) {
                     listener({ from, to });
@@ -92,7 +67,7 @@ export function StockfishProvider({ children }: { children: React.ReactNode }) {
         }
 
         workerRef.current.postMessage(`position fen ${fen}`);
-        workerRef.current.postMessage("go depth 10");
+        workerRef.current.postMessage("go depth 1");
     }
 
     function addEventListener<K extends keyof EventDetailMap>(
@@ -117,25 +92,10 @@ export function StockfishProvider({ children }: { children: React.ReactNode }) {
         };
     }
 
-    function newGame() {
-        if (!workerRef.current) {
-            return;
-        }
-
-        workerRef.current.postMessage("ucinewgame");
-        workerRef.current.postMessage("isready");
-    }
-
-    return (
-        <StockfishContext.Provider
-            value={{
-                newGame,
-                calcBestMove,
-                addEventListener,
-                removeEventListener,
-            }}
-        >
-            {children}
-        </StockfishContext.Provider>
-    );
+    return {
+        calcBestMove,
+        addEventListener,
+        removeEventListener,
+        ready,
+    };
 }
