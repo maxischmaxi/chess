@@ -67,16 +67,34 @@ export function Chessboard(props: Props) {
         (move: Move) => {
             if (move.isPromotion()) {
                 audio.play("promotion");
+
+                if (chess.current.isCheck() || chess.current.isCheckmate()) {
+                    setTimeout(() => {
+                        audio.play("move-check");
+                    }, 150);
+                }
                 return;
             }
 
             if (move.isKingsideCastle() || move.isQueensideCastle()) {
                 audio.play("castle");
+
+                if (chess.current.isCheck() || chess.current.isCheckmate()) {
+                    setTimeout(() => {
+                        audio.play("move-check");
+                    }, 150);
+                }
                 return;
             }
 
             if (move.isCapture()) {
                 audio.play("capture");
+
+                if (chess.current.isCheck() || chess.current.isCheckmate()) {
+                    setTimeout(() => {
+                        audio.play("move-check");
+                    }, 150);
+                }
                 return;
             }
 
@@ -91,7 +109,9 @@ export function Chessboard(props: Props) {
     );
 
     const executeAiMove = useCallback(() => {
+        console.log("Calculating best move...");
         stockfish.getBestMove(chess.current).then((stockfishMove) => {
+            console.log("Best move:", stockfishMove);
             const player = chess.current.turn();
 
             let move: Move | null = null;

@@ -128,7 +128,6 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     }, []);
 
     function play(type: AudioType): void {
-        console.log("playing " + type);
         if (!audioContext.current) {
             return;
         }
