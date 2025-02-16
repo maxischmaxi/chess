@@ -1,9 +1,4 @@
-import {
-    ActivePiece,
-    CHESSBOARD_SIZE,
-    Chessfield,
-    palette,
-} from "./definitions";
+import { ActivePiece, Board, CHESSBOARD_SIZE, palette } from "./definitions";
 
 // TODO: throw wird noch nicht gezeichnet, ka warum
 export function drawThrow(
@@ -30,24 +25,25 @@ export function drawThrow(
     context.closePath();
 }
 
-export function drawCell(
-    context: CanvasRenderingContext2D,
-    row: number,
-    col: number,
-    cellSize: number,
-    field: Chessfield,
-    activePiece: ActivePiece | null,
-    lastMoves: { row: number; col: number }[] = [],
-    debug: boolean = false,
-    selectedFields: { row: number; col: number }[] = [],
-    iAm: "w" | "b",
-    flipped: boolean,
-): void {
+type DrawCellParams = {
+    context: CanvasRenderingContext2D;
+    row: number;
+    col: number;
+    cellSize: number;
+    activePiece: ActivePiece | null;
+    selectedFields: { row: number; col: number }[];
+    board: Board;
+    flip: boolean;
+};
+
+export function drawCell(props: DrawCellParams): void {
+    const { context, row, col, cellSize, activePiece, selectedFields, flip } =
+        props;
+
     const isBlackField = (row + col) % 2 === 0;
     let fillstyle = isBlackField ? palette.dark : palette.light;
 
     if (activePiece) {
-        const flip = iAm === "b" || flipped;
         const displayRow = !flip ? row : 7 - row;
         const displayCol = !flip ? col : 7 - col;
 
@@ -56,12 +52,13 @@ export function drawCell(
         }
     }
 
-    if (
-        lastMoves.length <= 2 &&
-        lastMoves.some((move) => move.row === row && move.col === col)
-    ) {
-        fillstyle = palette.active;
-    }
+    // TODO wiederherstellen
+    // if (
+    //     lastMoves.length <= 2 &&
+    //     lastMoves.some((move) => move.row === row && move.col === col)
+    // ) {
+    //     fillstyle = palette.active;
+    // }
 
     if (
         selectedFields.some((field) => field.row === row && field.col === col)
@@ -72,17 +69,23 @@ export function drawCell(
     context.fillStyle = fillstyle;
     context.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
 
-    if (debug) {
-        context.fillStyle = "rgba(255,255,255,0.5)";
-        context.font = "12px sans-serif";
-        context.fillText(
-            `${col},${row}`,
-            col * cellSize + 10,
-            row * cellSize + 20,
-        );
+    context.fillStyle = "rgba(255,255,255,0.5)";
+    context.font = "12px sans-serif";
+    context.fillText(`${col},${row}`, col * cellSize + 10, row * cellSize + 20);
 
+    const field = props.board[row][col];
+
+    if (field === null) {
+        const colLabel = String.fromCharCode("a".charCodeAt(0) + col);
+        const rowLabel = 8 - row;
         context.fillText(
-            `${field.numberLabel}`,
+            `${colLabel}${rowLabel}`,
+            col * cellSize + 10,
+            row * cellSize + 35,
+        );
+    } else {
+        context.fillText(
+            `${field?.square}`,
             col * cellSize + 10,
             row * cellSize + 35,
         );

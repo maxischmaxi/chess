@@ -5,10 +5,6 @@ import dynamic from "next/dynamic";
 import { AudioProvider } from "@/components/audio-provider";
 import { WebsocketProvider } from "@/components/websocket-provider";
 
-const ImagesProvider = dynamic(() =>
-    import("@/components/images-provider").then((mod) => mod.ImagesProvider),
-);
-
 const ThemeProvider = dynamic(() =>
     import("@/components/theme-provider").then((mod) => mod.ThemeProvider),
 );
@@ -40,16 +36,14 @@ export default function RootLayout({
             >
                 <WebsocketProvider>
                     <AudioProvider>
-                        <ImagesProvider>
-                            <ThemeProvider
-                                attribute="class"
-                                defaultTheme="system"
-                                enableSystem
-                                disableTransitionOnChange
-                            >
-                                {children}
-                            </ThemeProvider>
-                        </ImagesProvider>
+                        <ThemeProvider
+                            attribute="class"
+                            defaultTheme="system"
+                            enableSystem
+                            disableTransitionOnChange
+                        >
+                            {children}
+                        </ThemeProvider>
                     </AudioProvider>
                 </WebsocketProvider>
             </body>

@@ -2,7 +2,18 @@
 
 import { createContext, ReactNode, useEffect, useRef, useState } from "react";
 
-type AudioType = "move" | "notify" | "capture";
+type AudioType =
+    | "capture"
+    | "castle"
+    | "game-end"
+    | "game-start"
+    | "illegal"
+    | "move-check"
+    | "move-opponent"
+    | "move-self"
+    | "notify"
+    | "premove"
+    | "promotion";
 
 export type IUseAudioContext = {
     ready: boolean;
@@ -17,69 +28,99 @@ export const ChessAudioConext = createContext<IUseAudioContext>({
 export function AudioProvider({ children }: { children: ReactNode }) {
     const [ready, setReady] = useState(false);
     const audioContext = useRef<AudioContext | null>(null);
-    const moveData = useRef<AudioBuffer | null>(null);
-    const notifyData = useRef<AudioBuffer | null>(null);
+
     const captureData = useRef<AudioBuffer | null>(null);
-    const buffer = useRef<AudioType[]>([]);
+    const castleData = useRef<AudioBuffer | null>(null);
+    const gameEndData = useRef<AudioBuffer | null>(null);
+    const gameStartData = useRef<AudioBuffer | null>(null);
+    const illegalData = useRef<AudioBuffer | null>(null);
+    const moveCheckData = useRef<AudioBuffer | null>(null);
+    const moveOpponentData = useRef<AudioBuffer | null>(null);
+    const moveSelfData = useRef<AudioBuffer | null>(null);
+    const notifyData = useRef<AudioBuffer | null>(null);
+    const premoveData = useRef<AudioBuffer | null>(null);
+    const promotionData = useRef<AudioBuffer | null>(null);
 
     async function load() {
         const context = new AudioContext();
         audioContext.current = context;
 
-        const moveSelfRes = await fetch("/move-self.mp3");
-        const notifyRes = await fetch("/notify.mp3");
-        const captureRes = await fetch("/capture.mp3");
+        const captureRes = await fetch("/sounds/capture.mp3");
+        const castleRes = await fetch("/sounds/castle.webm");
+        const gameEndRes = await fetch("/sounds/game-end.webm");
+        const gameStartRes = await fetch("/sounds/game-start.webm");
+        const illegalRes = await fetch("/sounds/illegal.webm");
+        const moveCheckRes = await fetch("/sounds/move-check.webm");
+        const moveOpponentRes = await fetch("/sounds/move-opponent.webm");
+        const moveSelfRes = await fetch("/sounds/move-self.mp3");
+        const notifyRes = await fetch("/sounds/notify.mp3");
+        const premoveRes = await fetch("/sounds/premove.webm");
+        const promotionRes = await fetch("/sounds/promote.webm");
 
+        const captureArrayBuffer = await captureRes.arrayBuffer();
+        const castleArrayBuffer = await castleRes.arrayBuffer();
+        const gameEndArrayBuffer = await gameEndRes.arrayBuffer();
+        const gameStartArrayBuffer = await gameStartRes.arrayBuffer();
+        const illegalArrayBuffer = await illegalRes.arrayBuffer();
+        const moveCheckArrayBuffer = await moveCheckRes.arrayBuffer();
+        const moveOpponentArrayBuffer = await moveOpponentRes.arrayBuffer();
         const moveSelfArrayBuffer = await moveSelfRes.arrayBuffer();
         const notifyArrayBuffer = await notifyRes.arrayBuffer();
-        const captureArrayBuffer = await captureRes.arrayBuffer();
+        const premoveArrayBuffer = await premoveRes.arrayBuffer();
+        const promotionArrayBuffer = await promotionRes.arrayBuffer();
 
-        const moveData =
-            await audioContext.current.decodeAudioData(moveSelfArrayBuffer);
-        const notifyData =
-            await audioContext.current.decodeAudioData(notifyArrayBuffer);
-        const captureData =
-            await audioContext.current.decodeAudioData(captureArrayBuffer);
+        const captureData = await context.decodeAudioData(captureArrayBuffer);
+        const castleData = await context.decodeAudioData(castleArrayBuffer);
+        const gameEndData = await context.decodeAudioData(gameEndArrayBuffer);
+        const gameStartData =
+            await context.decodeAudioData(gameStartArrayBuffer);
+        const illegalData = await context.decodeAudioData(illegalArrayBuffer);
+        const moveCheckData =
+            await context.decodeAudioData(moveCheckArrayBuffer);
+        const moveOpponentData = await context.decodeAudioData(
+            moveOpponentArrayBuffer,
+        );
+        const moveSelfData = await context.decodeAudioData(moveSelfArrayBuffer);
+        const notifyData = await context.decodeAudioData(notifyArrayBuffer);
+        const premoveData = await context.decodeAudioData(premoveArrayBuffer);
+        const promotionData =
+            await context.decodeAudioData(promotionArrayBuffer);
 
         return {
-            moveData,
-            notifyData,
             captureData,
+            castleData,
+            gameEndData,
+            gameStartData,
+            illegalData,
+            moveCheckData,
+            moveOpponentData,
+            moveSelfData,
+            notifyData,
+            premoveData,
+            promotionData,
         };
     }
 
     useEffect(() => {
         let cancel = false;
 
-        load()
-            .then((data) => {
-                if (cancel) return;
+        load().then((data) => {
+            if (cancel) return;
 
-                moveData.current = data.moveData;
-                notifyData.current = data.notifyData;
-                captureData.current = data.captureData;
-                setReady(true);
+            captureData.current = data.captureData;
+            castleData.current = data.castleData;
+            gameEndData.current = data.gameEndData;
+            gameStartData.current = data.gameStartData;
+            illegalData.current = data.illegalData;
+            moveCheckData.current = data.moveCheckData;
+            moveOpponentData.current = data.moveOpponentData;
+            moveSelfData.current = data.moveSelfData;
+            notifyData.current = data.notifyData;
+            premoveData.current = data.premoveData;
+            promotionData.current = data.promotionData;
 
-                if (audioContext.current) {
-                    for (const type of buffer.current) {
-                        const source =
-                            audioContext.current.createBufferSource();
-                        source.buffer =
-                            type === "move"
-                                ? data.moveData
-                                : type === "notify"
-                                  ? data.notifyData
-                                  : data.captureData;
-                        source.connect(audioContext.current.destination);
-                        source.start(0);
-                    }
-                }
-
-                buffer.current = [];
-            })
-            .catch(() => {
-                console.error("Failed to load audio");
-            });
+            setReady(true);
+        });
 
         return () => {
             cancel = true;
@@ -87,32 +128,60 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     }, []);
 
     function play(type: AudioType): void {
+        console.log("playing " + type);
         if (!audioContext.current) {
-            buffer.current = [...buffer.current, type];
-            console.log("buffering, audio context not ready");
             return;
         }
         if (!ready) {
-            buffer.current = [...buffer.current, type];
-            console.log("buffering, audio not ready");
             return;
         }
 
-        if (!moveData.current || !notifyData.current || !captureData.current) {
-            console.log("error, audio data not ready");
+        if (
+            !moveSelfData.current ||
+            !notifyData.current ||
+            !captureData.current
+        ) {
             return;
         }
 
-        console.log("play", type);
         audioContext.current.resume();
 
         const source = audioContext.current.createBufferSource();
-        source.buffer =
-            type === "move"
-                ? moveData.current
-                : type === "notify"
-                  ? notifyData.current
-                  : captureData.current;
+        switch (type) {
+            case "capture":
+                source.buffer = captureData.current;
+                break;
+            case "castle":
+                source.buffer = castleData.current;
+                break;
+            case "game-end":
+                source.buffer = gameEndData.current;
+                break;
+            case "game-start":
+                source.buffer = gameStartData.current;
+                break;
+            case "illegal":
+                source.buffer = illegalData.current;
+                break;
+            case "move-check":
+                source.buffer = moveCheckData.current;
+                break;
+            case "move-opponent":
+                source.buffer = moveOpponentData.current;
+                break;
+            case "move-self":
+                source.buffer = moveSelfData.current;
+                break;
+            case "notify":
+                source.buffer = notifyData.current;
+                break;
+            case "premove":
+                source.buffer = premoveData.current;
+                break;
+            case "promotion":
+                source.buffer = promotionData.current;
+                break;
+        }
         source.connect(audioContext.current.destination);
         source.start(0);
     }

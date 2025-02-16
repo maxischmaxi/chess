@@ -1,17 +1,10 @@
-import { IUseAudioContext } from "@/components/audio-provider";
 import { RefObject } from "react";
-import {
-    createChessboard,
-    getImageByPiece,
-    getPieceColor,
-    isMouseOverCell,
-} from "./utils";
+import { getFullPieceName, isMouseOverCell } from "./utils";
 import {
     ActivePiece,
+    Board,
     CHESSBOARD_SIZE,
-    Chessfield,
-    Move,
-    Piece,
+    ChessImages,
 } from "./definitions";
 import {
     drawCell,
@@ -19,7 +12,7 @@ import {
     drawHorizontalLine,
     drawVerticalLine,
 } from "./drawing";
-import { IUseImages } from "@/components/images-provider";
+import { Chess, Piece, Move } from "chess.js";
 
 export function clear(
     baseCanvas: RefObject<HTMLCanvasElement | null>,
@@ -66,203 +59,144 @@ function clearCanvases(
     );
 }
 
-function getLastMove(
-    fens: string[],
-    fenIndex: number,
-): { row: number; col: number }[] | undefined {
-    if (fenIndex === 0) return;
+type RenderMoveCellParams = {
+    context: CanvasRenderingContext2D;
+    cellSize: number;
+    activePiece: ActivePiece | null;
+    board: Board;
+    row: number;
+    col: number;
+};
 
-    const prevMoveFen = fens[fenIndex - 1];
-    const currentFen = fens[fenIndex];
-
-    if (!prevMoveFen) return undefined;
-    if (!currentFen) return undefined;
-
-    const movedPieces = [];
-
-    const prevBoard = createChessboard(prevMoveFen);
-    const currentBoard = createChessboard(currentFen);
-
-    for (let row = 0; row < CHESSBOARD_SIZE; row++) {
-        for (let col = 0; col < CHESSBOARD_SIZE; col++) {
-            if (prevBoard[row][col].piece !== currentBoard[row][col].piece) {
-                movedPieces.push({ row, col });
-            }
-        }
-    }
-
-    return movedPieces;
-}
-
-function renderStaticPiece(
-    context: CanvasRenderingContext2D,
-    piece: Piece,
-    row: number,
-    col: number,
-    cellSize: number,
-    images: IUseImages,
-) {
-    const image = getImageByPiece(piece, images);
-    renderImage(context, image!, col * cellSize, row * cellSize, cellSize);
-}
-
-function renderMoveCell(
-    context: CanvasRenderingContext2D,
-    row: number,
-    col: number,
-    cellSize: number,
-    fields: Chessfield[][],
-    activePiece: ActivePiece | null,
-    iAm: "w" | "b",
-    flipped: boolean,
-) {
-    const flip = iAm === "b" || flipped;
-    const displayRow = !flip ? row : CHESSBOARD_SIZE - 1 - row;
-    const displayCol = !flip ? col : CHESSBOARD_SIZE - 1 - col;
-
-    const targetPiece = fields[row][col].piece;
+function renderMoveCell({
+    context,
+    cellSize,
+    activePiece,
+    board,
+    row,
+    col,
+}: RenderMoveCellParams) {
+    const targetPiece = board[row][col];
 
     if (!targetPiece) {
-        drawCircle(
-            context,
-            displayCol * cellSize,
-            displayRow * cellSize,
-            cellSize,
-            3,
-        );
+        drawCircle(context, col * cellSize, row * cellSize, cellSize, 3);
         return;
     }
 
-    if (activePiece) {
-        const activePieceColor = getPieceColor(activePiece.piece);
-        const targetPieceColor = getPieceColor(targetPiece);
+    let color: string | null = null;
+    let size = 3;
 
-        if (activePieceColor === targetPieceColor) {
-            drawCircle(
-                context,
-                displayCol * cellSize,
-                displayRow * cellSize,
-                cellSize,
-                3,
-            );
+    if (activePiece) {
+        if (activePiece.piece.color === targetPiece.color) {
+            color = "rgba(255, 255, 255, 0.5)";
         } else {
-            drawCircle(
-                context,
-                displayCol * cellSize,
-                displayRow * cellSize,
-                cellSize,
-                5,
-                "rgba(255,0,0,0.5)",
-            );
+            color = "rgba(255, 0, 0, 0.5)";
+            size = 5;
         }
+    }
+
+    if (color) {
+        drawCircle(
+            context,
+            col * cellSize,
+            row * cellSize,
+            cellSize,
+            size,
+            color,
+        );
     }
 }
 
-function renderPossibleMoves(
-    context: CanvasRenderingContext2D,
-    piece: Piece,
-    cellSize: number,
-    fields: Chessfield[][],
-    activePiece: ActivePiece | null,
-    mouseX: number,
-    mouseY: number,
-    possibleMoves: string[],
-    iAm: "w" | "b",
-    flipped: boolean,
-): Move | false {
-    const isKing = piece === Piece.BlackKing || piece === Piece.WhiteKing;
+function renderPossibleMoves(props: RenderActivePieceParams): void {
+    const isKing = props.piece.type === "k";
 
-    if (isKing && possibleMoves.length === 0) {
-        return false;
+    if (isKing && props.moves.length === 0) {
+        return;
     }
 
-    let nearest: Move = { targetRow: -1, targetCol: -1 };
-
-    for (const move of possibleMoves) {
-        const fromCol = move.charCodeAt(0) - 97;
-        const fromRow = 8 - parseInt(move[1]);
-
-        if (activePiece?.row !== fromRow || activePiece?.col !== fromCol) {
+    for (const move of props.moves) {
+        if (props.activePiece?.piece.square !== move.from) {
             continue;
         }
 
-        const toCol = move.charCodeAt(2) - 97;
-        const toRow = 8 - parseInt(move[3]);
+        const to = move.to;
+        const toRow = 8 - parseInt(to[1]);
+        const toCol = to.charCodeAt(0) - 97;
+        const displayRow = !props.flip ? toRow : CHESSBOARD_SIZE - 1 - toRow;
+        const displayCol = !props.flip ? toCol : CHESSBOARD_SIZE - 1 - toCol;
 
-        renderMoveCell(
-            context,
-            toRow,
-            toCol,
-            cellSize,
-            fields,
-            activePiece,
-            iAm,
-            flipped,
+        renderMoveCell({
+            context: props.moveContext,
+            board: props.board,
+            cellSize: props.cellSize,
+            activePiece: props.activePiece,
+            row: displayRow,
+            col: displayCol,
+        });
+
+        const isOver = isMouseOverCell(
+            displayRow,
+            displayCol,
+            props.cellSize,
+            props.mouseX,
+            props.mouseY,
         );
 
-        const flip = iAm === "b" || flipped;
-        const displayRow = !flip ? toRow : CHESSBOARD_SIZE - 1 - toRow;
-        const displayCol = !flip ? toCol : CHESSBOARD_SIZE - 1 - toCol;
+        if (isOver) {
+            const targetRow = 8 - parseInt(move.to[1]);
+            const targetCol = move.to.charCodeAt(0) - 97;
 
-        if (isMouseOverCell(displayRow, displayCol, cellSize, mouseX, mouseY)) {
-            nearest = { targetRow: toRow, targetCol: toCol };
+            const displayRow = !props.flip
+                ? targetRow
+                : CHESSBOARD_SIZE - 1 - targetRow;
+            const displayCol = !props.flip
+                ? targetCol
+                : CHESSBOARD_SIZE - 1 - targetCol;
+
+            drawCircle(
+                props.moveContext,
+                displayCol * props.cellSize,
+                displayRow * props.cellSize,
+                props.cellSize,
+                5,
+            );
         }
     }
-
-    return nearest;
 }
 
-function renderActivePiece(
-    eventContext: CanvasRenderingContext2D,
-    moveContext: CanvasRenderingContext2D,
-    piece: Piece,
-    cellSize: number,
-    fields: Chessfield[][],
-    activePiece: ActivePiece | null,
-    mouseX: number,
-    mouseY: number,
-    images: IUseImages,
-    possibleMoves: string[],
-    iAm: "w" | "b",
-    flipped: boolean,
-) {
-    const nearest = renderPossibleMoves(
-        moveContext,
-        piece,
-        cellSize,
-        fields,
-        activePiece,
-        mouseX,
-        mouseY,
-        possibleMoves,
-        iAm,
-        flipped,
-    );
+type RenderActivePieceParams = {
+    board: Board;
+    eventContext: CanvasRenderingContext2D;
+    moveContext: CanvasRenderingContext2D;
+    piece: Piece;
+    cellSize: number;
+    activePiece: ActivePiece | null;
+    mouseX: number;
+    mouseY: number;
+    images: ChessImages;
+    moves: Move[];
+    iAm: "w" | "b";
+    flip: boolean;
+};
 
-    if (
-        nearest !== false &&
-        nearest.targetRow !== -1 &&
-        nearest.targetCol !== -1
-    ) {
-        const flip = iAm === "b" || flipped;
-        const displayRow = !flip
-            ? nearest.targetRow
-            : CHESSBOARD_SIZE - 1 - nearest.targetRow;
-        const displayCol = !flip
-            ? nearest.targetCol
-            : CHESSBOARD_SIZE - 1 - nearest.targetCol;
+function renderActivePiece(props: RenderActivePieceParams) {
+    if (!props.activePiece) return;
 
-        drawCircle(
-            moveContext,
-            displayCol * cellSize,
-            displayRow * cellSize,
-            cellSize,
-            5,
-        );
-    }
+    renderPossibleMoves(props);
 
-    const image = getImageByPiece(piece, images);
-    renderImage(eventContext, image!, mouseX, mouseY, cellSize);
+    const key =
+        `${getFullPieceName(props.piece.type)}-${props.piece.color}` as keyof ChessImages;
+
+    const image = props.images[key];
+    if (!image) return;
+
+    let x = props.mouseX;
+    let y = props.mouseY;
+
+    x = x - props.activePiece.grabPoint.x;
+    y = y - props.activePiece.grabPoint.y;
+
+    renderImage(props.eventContext, image, x, y, props.cellSize);
 }
 
 function renderImage(
@@ -284,136 +218,20 @@ function renderImage(
     context.drawImage(img, x, y, cellSize, cellSize);
 }
 
-function renderCell(
-    baseContext: CanvasRenderingContext2D,
-    eventContext: CanvasRenderingContext2D,
-    moveContext: CanvasRenderingContext2D,
-    row: number,
-    col: number,
-    cellSize: number,
-    lastMoves: { row: number; col: number }[] | undefined,
-    fields: Chessfield[][],
-    activePiece: ActivePiece | null,
-    mouseX: number,
-    mouseY: number,
-    images: IUseImages,
-    selectedFields: { row: number; col: number }[],
-    possibleMoves: string[],
-    iAm: "w" | "b",
-    flipped: boolean,
-) {
-    const piece = fields[row][col].piece;
-    const flip = iAm === "b" || flipped;
-    const displayRow = !flip ? row : CHESSBOARD_SIZE - 1 - row;
-    const displayCol = !flip ? col : CHESSBOARD_SIZE - 1 - col;
-
-    drawCell(
-        baseContext,
-        displayRow,
-        displayCol,
-        cellSize,
-        fields[row][col],
-        activePiece,
-        lastMoves,
-        true,
-        selectedFields,
-        iAm,
-        flipped,
-    );
-
-    if (!piece) return;
-
-    const isActivePiece = activePiece?.row === row && activePiece?.col === col;
-
-    if (isActivePiece) {
-        renderActivePiece(
-            eventContext,
-            moveContext,
-            piece,
-            cellSize,
-            fields,
-            activePiece,
-            mouseX,
-            mouseY,
-            images,
-            possibleMoves,
-            iAm,
-            flipped,
-        );
-    } else {
-        renderStaticPiece(
-            baseContext,
-            piece,
-            displayRow,
-            displayCol,
-            cellSize,
-            images,
-        );
-    }
-}
-
-function renderBoard(
-    baseContext: CanvasRenderingContext2D,
-    eventContext: CanvasRenderingContext2D,
-    moveContext: CanvasRenderingContext2D,
-    cellSize: number,
-    fields: Chessfield[][],
-    fens: string[],
-    fenIndex: number,
-    activePiece: ActivePiece | null,
-    mouseX: number,
-    mouseY: number,
-    images: IUseImages,
-    selectedFields: { row: number; col: number }[],
-    iAm: "w" | "b",
-    possibleMoves: string[],
-    flipped: boolean,
-) {
-    const lastMoves = getLastMove(fens, fenIndex);
-
-    for (let row = 0; row < CHESSBOARD_SIZE; row++) {
-        for (let col = 0; col < CHESSBOARD_SIZE; col++) {
-            renderCell(
-                baseContext,
-                eventContext,
-                moveContext,
-                row,
-                col,
-                cellSize,
-                lastMoves,
-                fields,
-                activePiece,
-                mouseX,
-                mouseY,
-                images,
-                selectedFields,
-                possibleMoves,
-                iAm,
-                flipped,
-            );
-        }
-    }
-}
-
 export function render(
-    images: IUseImages,
-    audio: IUseAudioContext,
+    chess: Chess,
+    images: ChessImages,
     baseCanvas: RefObject<HTMLCanvasElement | null>,
     eventCanvas: RefObject<HTMLCanvasElement | null>,
     moveCanvas: RefObject<HTMLCanvasElement | null>,
     boardSize: number,
-    fens: string[],
-    fenIndex: number,
     activePiece: ActivePiece | null,
     mouseX: number,
     mouseY: number,
     selectedFields: { row: number; col: number }[],
     iAm: "w" | "b",
-    possibleMoves: string[],
     flipped: boolean,
 ) {
-    if (!images.ready) return;
-    if (!audio.ready) return;
     if (!baseCanvas.current) return;
     if (!eventCanvas.current) return;
     if (!moveCanvas.current) return;
@@ -435,24 +253,72 @@ export function render(
 
     const cellSize = boardSize / CHESSBOARD_SIZE;
     clearCanvases(baseContext, eventContext, moveContext);
+    const flip = iAm === "b" || flipped;
 
-    renderBoard(
-        baseContext,
-        eventContext,
-        moveContext,
-        cellSize,
-        createChessboard(fens[fenIndex]),
-        fens,
-        fenIndex,
-        activePiece,
-        mouseX,
-        mouseY,
-        images,
-        selectedFields,
-        iAm,
-        possibleMoves,
-        flipped,
-    );
+    const board = chess.board();
+    const moves = chess.moves({ verbose: true });
+
+    for (let r = 0; r < 8; r++) {
+        const row = board[r];
+
+        for (let c = 0; c < row.length; c++) {
+            const piece = row[c];
+
+            const displayRow = !flip ? r : CHESSBOARD_SIZE - 1 - r;
+            const displayCol = !flip ? c : CHESSBOARD_SIZE - 1 - c;
+
+            drawCell({
+                context: baseContext,
+                board,
+                row: r,
+                col: c,
+                cellSize: cellSize,
+                activePiece: activePiece,
+                selectedFields: selectedFields,
+                flip,
+            });
+
+            if (!piece) continue;
+
+            const isActivePiece =
+                activePiece?.row === r && activePiece?.col === c;
+
+            if (isActivePiece) {
+                renderActivePiece({
+                    board,
+                    eventContext,
+                    moveContext,
+                    piece,
+                    cellSize,
+                    activePiece,
+                    mouseX,
+                    mouseY,
+                    images,
+                    moves,
+                    iAm,
+                    flip,
+                });
+
+                continue;
+            }
+
+            const key =
+                `${getFullPieceName(piece.type)}-${piece.color}` as keyof ChessImages;
+            const image = images[key];
+
+            if (!image) {
+                continue;
+            }
+
+            renderImage(
+                moveContext,
+                image,
+                displayCol * cellSize,
+                displayRow * cellSize,
+                cellSize,
+            );
+        }
+    }
 
     renderLines(baseContext, cellSize);
 }

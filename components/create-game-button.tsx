@@ -77,7 +77,7 @@ export function CreateGameButton() {
                     >
                         <span>Weiß</span>
                         <Image
-                            src="/king-w.svg"
+                            src="/pieces/king-w.svg"
                             width={50}
                             height={50}
                             alt="White King"
@@ -90,7 +90,7 @@ export function CreateGameButton() {
                     >
                         <span>Zufall</span>
                         <Image
-                            src="/king-w.svg"
+                            src="/pieces/king-w.svg"
                             width={50}
                             height={50}
                             alt="Random King"
@@ -103,7 +103,7 @@ export function CreateGameButton() {
                     >
                         <span>Schwarz</span>
                         <Image
-                            src="/king-b.svg"
+                            src="/pieces/king-b.svg"
                             width={50}
                             height={50}
                             alt="Black King"

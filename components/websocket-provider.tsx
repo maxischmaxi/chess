@@ -1,20 +1,17 @@
 "use client";
 
 import { WebsocketMessage } from "@/lib/definitions";
+import { sleep } from "@/lib/utils";
 import { useParams } from "next/navigation";
 import { createContext, ReactNode, useEffect, useRef, useState } from "react";
 
 type EventDetailMap = {
     onMove: string;
     onAgainst: { id: string; color: "w" | "b" };
-    onPossibleMoves: string[];
     onConnect: undefined;
     onDisconnect: undefined;
     onClose: undefined;
     onError: { message: string };
-    onOutcome: { outcome: string; winner: string };
-    onCapturedPieces: { white: string[]; black: string[] };
-    onShouldStart: undefined;
 };
 
 type ListenerMap = {
@@ -30,7 +27,7 @@ type IUseWebsocket = {
         event: K,
         listener: (event: EventDetailMap[K]) => void,
     ): void;
-    sendMove(gameId: string, move: string, color: "w" | "b"): void;
+    sendMove(gameId: string, move: string, color: "w" | "b"): Promise<void>;
 };
 
 type WebsocketProviderProps = {
@@ -43,17 +40,13 @@ const baseUrl = `${protocol}://${process.env.NEXT_PUBLIC_API_GATEWAY}/ws`;
 export const WebsocketContext = createContext<IUseWebsocket>({
     addEventListener() {},
     removeEventListener() {},
-    sendMove() {},
+    async sendMove() {},
 });
 
 export function WebsocketProvider({ children }: WebsocketProviderProps) {
     const socket = useRef<WebSocket | null>(null);
     const listeners = useRef<ListenerMap>({
         onMove: [],
-        onShouldStart: [],
-        onPossibleMoves: [],
-        onCapturedPieces: [],
-        onOutcome: [],
         onConnect: [],
         onDisconnect: [],
         onError: [],
@@ -91,7 +84,6 @@ export function WebsocketProvider({ children }: WebsocketProviderProps) {
     }, [connected, gameId, gotHello]);
 
     useEffect(() => {
-        console.log("Connecting to websocket");
         socket.current = new WebSocket(
             `${baseUrl}?id=${localStorage.getItem("id") || ""}`,
         );
@@ -129,37 +121,10 @@ export function WebsocketProvider({ children }: WebsocketProviderProps) {
             }
 
             switch (type) {
-                case "outcome": {
-                    const { outcome, winner } = payload;
-                    listeners.current.onOutcome.forEach((listener) =>
-                        listener({ outcome, winner }),
-                    );
-                    break;
-                }
-                case "possibleMoves": {
-                    const { moves } = payload;
-                    listeners.current.onPossibleMoves.forEach((listener) =>
-                        listener(moves),
-                    );
-                    break;
-                }
                 case "against": {
                     const { id, color } = payload;
                     listeners.current.onAgainst.forEach((listener) =>
                         listener({ id, color }),
-                    );
-
-                    if (color === "w") {
-                        listeners.current.onShouldStart.forEach((listener) =>
-                            listener(undefined),
-                        );
-                    }
-                    break;
-                }
-                case "capturedPieces": {
-                    const { white, black } = payload;
-                    listeners.current.onCapturedPieces.forEach((listener) =>
-                        listener({ white, black }),
                     );
                     break;
                 }
@@ -171,9 +136,9 @@ export function WebsocketProvider({ children }: WebsocketProviderProps) {
                     break;
                 }
                 case "move": {
-                    const { fen } = payload;
+                    const { move } = payload;
                     listeners.current.onMove.forEach((listener) =>
-                        listener(fen),
+                        listener(move),
                     );
                     break;
                 }
@@ -209,7 +174,8 @@ export function WebsocketProvider({ children }: WebsocketProviderProps) {
         };
     }
 
-    function sendMove(gameId: string, move: string, color: "w" | "b") {
+    async function sendMove(gameId: string, move: string, color: "w" | "b") {
+        await sleep(1000);
         if (!socket.current) return;
 
         const message: WebsocketMessage = {
