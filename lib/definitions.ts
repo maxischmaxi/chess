@@ -64,3 +64,12 @@ export const defaultChessImages: ChessImages = {
     "queen-w": null,
     "king-w": null,
 };
+
+export type LocalGame = {
+    id: string;
+    color: "w" | "b";
+    player1: string;
+    player2: string;
+    fen: string;
+    moves: string[];
+};

@@ -1,5 +1,6 @@
 "use client";
 
+import { v4 } from "uuid";
 import { useState } from "react";
 import { Button } from "./ui/button";
 import { useRouter } from "next/navigation";
@@ -13,15 +14,42 @@ import {
     DialogTrigger,
 } from "./ui/dialog";
 import Image from "next/image";
+import { LocalGame } from "@/lib/definitions";
 
 export function CreateGameButton() {
     const [errorMessage, setErrorMessage] = useState("");
     const [open, setOpen] = useState(false);
-    const [againstAi, setAgainstAi] = useState(false);
+    const [againstAi, setAgainstAi] = useState(true);
     const [preferredColor, setPreferredColor] = useState<"w" | "b" | "r">("w");
     const router = useRouter();
 
     async function createGame() {
+        if (againstAi) {
+            const id = v4();
+            const localGames = JSON.parse(
+                localStorage.getItem("games") || "[]",
+            );
+            let color: "w" | "b";
+            if (preferredColor === "r") {
+                color = Math.random() > 0.5 ? "w" : "b";
+            } else {
+                color = preferredColor;
+            }
+
+            const game: LocalGame = {
+                id,
+                fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                player1: localStorage.getItem("id") ?? "",
+                player2: "ai",
+                color,
+                moves: [],
+            };
+            localGames.push(game);
+            localStorage.setItem("games", JSON.stringify(localGames));
+            router.push(`/game/bot/${id}`);
+            return;
+        }
+
         const id = localStorage.getItem("id");
 
         if (!id) {

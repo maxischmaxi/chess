@@ -18,5 +18,5 @@ export default async function Page({ params }: Props) {
         return <div>Game not found</div>;
     }
 
-    return <Chessboard gameId={gameId} fens={fens} />;
+    return <Chessboard fens={fens} againstAi={false} />;
 }

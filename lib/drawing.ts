@@ -1,4 +1,4 @@
-import { ActivePiece, Board, CHESSBOARD_SIZE, palette } from "./definitions";
+import { CHESSBOARD_SIZE } from "./definitions";
 
 // TODO: throw wird noch nicht gezeichnet, ka warum
 export function drawThrow(
@@ -23,73 +23,6 @@ export function drawThrow(
 
     context.stroke();
     context.closePath();
-}
-
-type DrawCellParams = {
-    context: CanvasRenderingContext2D;
-    row: number;
-    col: number;
-    cellSize: number;
-    activePiece: ActivePiece | null;
-    selectedFields: { row: number; col: number }[];
-    board: Board;
-    flip: boolean;
-};
-
-export function drawCell(props: DrawCellParams): void {
-    const { context, row, col, cellSize, activePiece, selectedFields, flip } =
-        props;
-
-    const isBlackField = (row + col) % 2 === 0;
-    let fillstyle = isBlackField ? palette.dark : palette.light;
-
-    if (activePiece) {
-        const displayRow = !flip ? row : 7 - row;
-        const displayCol = !flip ? col : 7 - col;
-
-        if (activePiece.row === displayRow && activePiece.col === displayCol) {
-            fillstyle = palette.active;
-        }
-    }
-
-    // TODO wiederherstellen
-    // if (
-    //     lastMoves.length <= 2 &&
-    //     lastMoves.some((move) => move.row === row && move.col === col)
-    // ) {
-    //     fillstyle = palette.active;
-    // }
-
-    if (
-        selectedFields.some((field) => field.row === row && field.col === col)
-    ) {
-        fillstyle = palette.selected;
-    }
-
-    context.fillStyle = fillstyle;
-    context.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
-
-    context.fillStyle = "rgba(255,255,255,0.5)";
-    context.font = "12px sans-serif";
-    context.fillText(`${col},${row}`, col * cellSize + 10, row * cellSize + 20);
-
-    const field = props.board[row][col];
-
-    if (field === null) {
-        const colLabel = String.fromCharCode("a".charCodeAt(0) + col);
-        const rowLabel = 8 - row;
-        context.fillText(
-            `${colLabel}${rowLabel}`,
-            col * cellSize + 10,
-            row * cellSize + 35,
-        );
-    } else {
-        context.fillText(
-            `${field?.square}`,
-            col * cellSize + 10,
-            row * cellSize + 35,
-        );
-    }
 }
 
 export function drawCircle(

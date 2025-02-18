@@ -1,44 +1,39 @@
-import { RefObject } from "react";
 import { getFullPieceName, isMouseOverCell } from "./utils";
 import {
     ActivePiece,
     Board,
     CHESSBOARD_SIZE,
     ChessImages,
+    palette,
 } from "./definitions";
+import { drawCircle, drawHorizontalLine, drawVerticalLine } from "./drawing";
+import { Piece, Move } from "chess.js";
 import {
-    drawCell,
-    drawCircle,
-    drawHorizontalLine,
-    drawVerticalLine,
-} from "./drawing";
-import { Chess, Piece, Move } from "chess.js";
+    activePiece,
+    boardSize,
+    chess,
+    getBoard,
+    iAm,
+    mouseX,
+    mouseY,
+    selectedFields,
+} from "@/components/chessboard";
+import { images } from "./images";
 
-export function clear(
-    baseCanvas: RefObject<HTMLCanvasElement | null>,
-    eventCanvas: RefObject<HTMLCanvasElement | null>,
-    moveCanvas: RefObject<HTMLCanvasElement | null>,
-): void {
-    if (!baseCanvas.current) return;
-    if (!eventCanvas.current) return;
-    if (!moveCanvas.current) return;
+const speed = 1;
+let lastTimestamp = -1;
+let baseCanvas: HTMLCanvasElement | null = null;
+let eventCanvas: HTMLCanvasElement | null = null;
+let moveCanvas: HTMLCanvasElement | null = null;
+let baseContext: CanvasRenderingContext2D | null = null;
+let eventContext: CanvasRenderingContext2D | null = null;
+let moveContext: CanvasRenderingContext2D | null = null;
 
-    const baseContext = baseCanvas.current.getContext("2d");
-    const eventContext = eventCanvas.current.getContext("2d");
-    const moveContext = moveCanvas.current.getContext("2d");
-
+function clearCanvases() {
     if (!baseContext) return;
     if (!eventContext) return;
     if (!moveContext) return;
 
-    clearCanvases(baseContext, eventContext, moveContext);
-}
-
-function clearCanvases(
-    baseContext: CanvasRenderingContext2D,
-    eventContext: CanvasRenderingContext2D,
-    moveContext: CanvasRenderingContext2D,
-) {
     baseContext.clearRect(
         0,
         0,
@@ -59,55 +54,9 @@ function clearCanvases(
     );
 }
 
-type RenderMoveCellParams = {
-    context: CanvasRenderingContext2D;
-    cellSize: number;
-    activePiece: ActivePiece | null;
-    board: Board;
-    row: number;
-    col: number;
-};
-
-function renderMoveCell({
-    context,
-    cellSize,
-    activePiece,
-    board,
-    row,
-    col,
-}: RenderMoveCellParams) {
-    const targetPiece = board[row][col];
-
-    if (!targetPiece) {
-        drawCircle(context, col * cellSize, row * cellSize, cellSize, 3);
-        return;
-    }
-
-    let color: string | null = null;
-    let size = 3;
-
-    if (activePiece) {
-        if (activePiece.piece.color === targetPiece.color) {
-            color = "rgba(255, 255, 255, 0.5)";
-        } else {
-            color = "rgba(255, 0, 0, 0.5)";
-            size = 5;
-        }
-    }
-
-    if (color) {
-        drawCircle(
-            context,
-            col * cellSize,
-            row * cellSize,
-            cellSize,
-            size,
-            color,
-        );
-    }
-}
-
 function renderPossibleMoves(props: RenderActivePieceParams): void {
+    if (!moveContext) return;
+
     const isKing = props.piece.type === "k";
 
     if (isKing && props.moves.length === 0) {
@@ -115,48 +64,70 @@ function renderPossibleMoves(props: RenderActivePieceParams): void {
     }
 
     for (const move of props.moves) {
-        if (props.activePiece?.piece.square !== move.from) {
+        if (activePiece?.piece.square !== move.from) {
             continue;
         }
 
         const to = move.to;
-        const toRow = 8 - parseInt(to[1]);
-        const toCol = to.charCodeAt(0) - 97;
-        const displayRow = !props.flip ? toRow : CHESSBOARD_SIZE - 1 - toRow;
-        const displayCol = !props.flip ? toCol : CHESSBOARD_SIZE - 1 - toCol;
+        let toRow;
+        let toCol;
 
-        renderMoveCell({
-            context: props.moveContext,
-            board: props.board,
-            cellSize: props.cellSize,
-            activePiece: props.activePiece,
-            row: displayRow,
-            col: displayCol,
-        });
+        if (iAm === "w") {
+            toRow = 8 - parseInt(to[1]);
+            toCol = to.charCodeAt(0) - 97;
+        } else {
+            toRow = parseInt(to[1]) - 1;
+            toCol = "h".charCodeAt(0) - to.charCodeAt(0);
+        }
+
+        const targetPiece = props.board[toRow][toCol];
+
+        if (!targetPiece) {
+            drawCircle(
+                moveContext,
+                toCol * props.cellSize,
+                toRow * props.cellSize,
+                props.cellSize,
+                3,
+            );
+        } else {
+            let color: string | null = null;
+            let size = 3;
+
+            if (activePiece) {
+                if (activePiece.piece.color === targetPiece.color) {
+                    color = "rgba(255, 255, 255, 0.5)";
+                } else {
+                    color = "rgba(255, 0, 0, 0.5)";
+                    size = 5;
+                }
+            }
+
+            if (color) {
+                drawCircle(
+                    moveContext,
+                    toCol * props.cellSize,
+                    toRow * props.cellSize,
+                    props.cellSize,
+                    size,
+                    color,
+                );
+            }
+        }
 
         const isOver = isMouseOverCell(
-            displayRow,
-            displayCol,
+            toRow,
+            toCol,
             props.cellSize,
-            props.mouseX,
-            props.mouseY,
+            mouseX,
+            mouseY,
         );
 
         if (isOver) {
-            const targetRow = 8 - parseInt(move.to[1]);
-            const targetCol = move.to.charCodeAt(0) - 97;
-
-            const displayRow = !props.flip
-                ? targetRow
-                : CHESSBOARD_SIZE - 1 - targetRow;
-            const displayCol = !props.flip
-                ? targetCol
-                : CHESSBOARD_SIZE - 1 - targetCol;
-
             drawCircle(
-                props.moveContext,
-                displayCol * props.cellSize,
-                displayRow * props.cellSize,
+                moveContext,
+                toCol * props.cellSize,
+                toRow * props.cellSize,
                 props.cellSize,
                 5,
             );
@@ -166,37 +137,30 @@ function renderPossibleMoves(props: RenderActivePieceParams): void {
 
 type RenderActivePieceParams = {
     board: Board;
-    eventContext: CanvasRenderingContext2D;
-    moveContext: CanvasRenderingContext2D;
     piece: Piece;
     cellSize: number;
-    activePiece: ActivePiece | null;
-    mouseX: number;
-    mouseY: number;
-    images: ChessImages;
     moves: Move[];
-    iAm: "w" | "b";
-    flip: boolean;
 };
 
 function renderActivePiece(props: RenderActivePieceParams) {
-    if (!props.activePiece) return;
+    if (!activePiece) return;
 
     renderPossibleMoves(props);
 
     const key =
         `${getFullPieceName(props.piece.type)}-${props.piece.color}` as keyof ChessImages;
 
-    const image = props.images[key];
+    const image = images[key];
     if (!image) return;
 
-    let x = props.mouseX;
-    let y = props.mouseY;
+    let x = mouseX;
+    let y = mouseY;
 
-    x = x - props.activePiece.grabPoint.x;
-    y = y - props.activePiece.grabPoint.y;
+    x = x - activePiece.grabPoint.x;
+    y = y - activePiece.grabPoint.y;
 
-    renderImage(props.eventContext, image, x, y, props.cellSize);
+    if (!eventContext) return;
+    renderImage(eventContext, image, x, y, props.cellSize);
 }
 
 function renderImage(
@@ -218,44 +182,120 @@ function renderImage(
     context.drawImage(img, x, y, cellSize, cellSize);
 }
 
-export function render(
-    chess: Chess,
-    images: ChessImages,
-    baseCanvas: RefObject<HTMLCanvasElement | null>,
-    eventCanvas: RefObject<HTMLCanvasElement | null>,
-    moveCanvas: RefObject<HTMLCanvasElement | null>,
-    boardSize: number,
-    activePiece: ActivePiece | null,
-    mouseX: number,
-    mouseY: number,
-    selectedFields: { row: number; col: number }[],
-    iAm: "w" | "b",
-    flipped: boolean,
-) {
-    if (!baseCanvas.current) return;
-    if (!eventCanvas.current) return;
-    if (!moveCanvas.current) return;
+function prepare() {
+    if (!baseCanvas) {
+        baseCanvas = document.getElementById(
+            "base-canvas",
+        ) as HTMLCanvasElement;
+    }
+    if (!eventCanvas) {
+        eventCanvas = document.getElementById(
+            "event-canvas",
+        ) as HTMLCanvasElement;
+    }
+    if (!moveCanvas) {
+        moveCanvas = document.getElementById(
+            "move-canvas",
+        ) as HTMLCanvasElement;
+    }
 
-    baseCanvas.current.width = boardSize;
-    baseCanvas.current.height = boardSize;
-    eventCanvas.current.width = boardSize;
-    eventCanvas.current.height = boardSize;
-    moveCanvas.current.width = boardSize;
-    moveCanvas.current.height = boardSize;
+    if (!baseCanvas) return;
+    if (!eventCanvas) return;
+    if (!moveCanvas) return;
 
-    const baseContext = baseCanvas.current.getContext("2d");
-    const eventContext = eventCanvas.current.getContext("2d");
-    const moveContext = moveCanvas.current.getContext("2d");
+    baseCanvas.width = boardSize;
+    baseCanvas.height = boardSize;
+    eventCanvas.width = boardSize;
+    eventCanvas.height = boardSize;
+    moveCanvas.width = boardSize;
+    moveCanvas.height = boardSize;
 
-    if (!baseContext) return;
-    if (!eventContext) return;
-    if (!moveContext) return;
+    if (!baseContext) {
+        baseContext = baseCanvas.getContext("2d");
+    }
+    if (!eventContext) {
+        eventContext = eventCanvas.getContext("2d");
+    }
+    if (!moveContext) {
+        moveContext = moveCanvas.getContext("2d");
+    }
+}
+
+type DrawCellParams = {
+    row: number;
+    col: number;
+    cellSize: number;
+    board: Board;
+};
+
+function renderCell(props: DrawCellParams): void {
+    if (!baseContext) {
+        return;
+    }
+
+    const { row, col, cellSize } = props;
+
+    const isBlackField = (row + col) % 2 === 0;
+    let fillstyle = isBlackField ? palette.dark : palette.light;
+
+    if (activePiece) {
+        if (activePiece.row === row && activePiece.col === col) {
+            fillstyle = palette.active;
+        }
+    }
+
+    if (
+        selectedFields.some((field) => field.row === row && field.col === col)
+    ) {
+        fillstyle = palette.selected;
+    }
+
+    baseContext.fillStyle = fillstyle;
+    baseContext.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+
+    baseContext.fillStyle = "rgba(255,255,255,0.5)";
+    baseContext.font = "12px sans-serif";
+
+    const field = props.board[row][col];
+
+    if (field === null) {
+        let colLabel;
+        let rowLabel;
+
+        if (iAm === "w") {
+            colLabel = String.fromCharCode("a".charCodeAt(0) + col);
+            rowLabel = 8 - row;
+        } else {
+            colLabel = String.fromCharCode("h".charCodeAt(0) - col);
+            rowLabel = row + 1;
+        }
+
+        baseContext.fillText(
+            `${colLabel}${rowLabel}`,
+            col * cellSize + 5,
+            row * cellSize + 15,
+        );
+    } else {
+        baseContext.fillText(
+            `${field?.square}`,
+            col * cellSize + 5,
+            row * cellSize + 15,
+        );
+    }
+}
+
+export function render(timestamp: number): void {
+    const delta = (timestamp - lastTimestamp) * speed;
+    lastTimestamp = timestamp;
+    console.log(delta);
+
+    prepare();
+    clearCanvases();
 
     const cellSize = boardSize / CHESSBOARD_SIZE;
-    clearCanvases(baseContext, eventContext, moveContext);
-    const flip = iAm === "b" || flipped;
 
-    const board = chess.board();
+    const board = getBoard();
+
     const moves = chess.moves({ verbose: true });
 
     for (let r = 0; r < 8; r++) {
@@ -264,18 +304,11 @@ export function render(
         for (let c = 0; c < row.length; c++) {
             const piece = row[c];
 
-            const displayRow = !flip ? r : CHESSBOARD_SIZE - 1 - r;
-            const displayCol = !flip ? c : CHESSBOARD_SIZE - 1 - c;
-
-            drawCell({
-                context: baseContext,
+            renderCell({
                 board,
                 row: r,
                 col: c,
                 cellSize: cellSize,
-                activePiece: activePiece,
-                selectedFields: selectedFields,
-                flip,
             });
 
             if (!piece) continue;
@@ -286,17 +319,9 @@ export function render(
             if (isActivePiece) {
                 renderActivePiece({
                     board,
-                    eventContext,
-                    moveContext,
                     piece,
                     cellSize,
-                    activePiece,
-                    mouseX,
-                    mouseY,
-                    images,
                     moves,
-                    iAm,
-                    flip,
                 });
 
                 continue;
@@ -310,25 +335,30 @@ export function render(
                 continue;
             }
 
+            if (!moveContext) {
+                return;
+            }
+
             renderImage(
                 moveContext,
                 image,
-                displayCol * cellSize,
-                displayRow * cellSize,
+                c * cellSize,
+                r * cellSize,
                 cellSize,
             );
         }
     }
 
-    renderLines(baseContext, cellSize);
+    renderLines(cellSize);
 }
 
-function renderLines(
-    context: CanvasRenderingContext2D,
-    cellSize: number,
-): void {
+function renderLines(cellSize: number): void {
+    if (!baseContext) {
+        return;
+    }
+
     for (let i = 0; i < CHESSBOARD_SIZE; i++) {
-        drawVerticalLine(context, cellSize, i);
-        drawHorizontalLine(context, cellSize, i);
+        drawVerticalLine(baseContext, cellSize, i);
+        drawHorizontalLine(baseContext, cellSize, i);
     }
 }

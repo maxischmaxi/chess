@@ -1,24 +1,17 @@
 "use client";
 
 import { Chess, Move } from "chess.js";
-import {
-    ActivePiece,
-    CHESSBOARD_SIZE,
-    ChessImages,
-    defaultChessImages,
-} from "@/lib/definitions";
+import { ActivePiece, CHESSBOARD_SIZE, LocalGame } from "@/lib/definitions";
 import { render } from "@/lib/render";
 import {
     MouseEvent as ReactMouseEvent,
-    use,
     useCallback,
     useEffect,
     useRef,
     useState,
 } from "react";
 import { WinProbability } from "./winprobabilty";
-import { ChessAudioConext } from "./audio-provider";
-import { useStockfish } from "@/hooks/useStockfish";
+import { play } from "./audio-provider";
 import { Button } from "./ui/button";
 import {
     Dialog,
@@ -29,242 +22,133 @@ import {
     DialogTitle,
 } from "./ui/dialog";
 import { CreateGameButton } from "./create-game-button";
-import { WebsocketContext } from "./websocket-provider";
+import {
+    addWebsocketListener,
+    removeWebsocketListener,
+    sendMove,
+} from "@/lib/websocket";
+import { addImagesListener, removeImagesListener } from "@/lib/images";
+import {
+    addOutcomeListener,
+    addScoreListener,
+    getBestMove,
+    removeOutcomeListener,
+    removeScoreListener,
+} from "@/lib/stockfish";
+import { useParams } from "next/navigation";
+
+export const chess = new Chess();
+export let selectedFields: { row: number; col: number }[] = [];
+export let activePiece: ActivePiece | null = null;
+export let boardSize: number = 0;
+export let mouseX = 0;
+export let mouseY = 0;
+export let iAm: "w" | "b" = "w";
+export let flipped = false;
+export let moveBuffer: string[] = [];
 
 type Props = {
-    fens: string[];
-    gameId: string;
+    fens?: string[];
+    againstAi: boolean;
 };
 
-const pieces = ["pawn", "knight", "bishop", "rook", "queen", "king"];
-const colors = ["w", "b"];
+export function getBoard() {
+    if (iAm === "b") {
+        return chess
+            .board()
+            .reverse()
+            .map((row) => row.reverse());
+    }
+    return chess.board();
+}
+
+const loadLocalGames = (): Array<LocalGame> => {
+    const localGames = JSON.parse(localStorage.getItem("games") || "[]");
+
+    if (!Array.isArray(localGames)) {
+        localStorage.setItem("games", "[]");
+        return [];
+    }
+
+    return localGames;
+};
+
+export const saveLocalGame = (gameId: string): void => {
+    const localGames = loadLocalGames();
+    for (let i = 0; i < localGames.length; i++) {
+        const game = localGames[i];
+        if (game.id === gameId) {
+            const fen = chess.fen();
+            game.fen = fen;
+            const moves = chess.history({ verbose: true });
+            game.moves = moves.map((m) => m.lan);
+
+            localStorage.setItem("games", JSON.stringify(localGames));
+            return;
+        }
+    }
+};
+
+export const playSound = (move: Move) => {
+    if (move.isPromotion()) {
+        if (chess.isCheck() || chess.isCheckmate()) {
+            play("move-check");
+        } else {
+            play("promotion");
+        }
+        return;
+    }
+
+    if (move.isKingsideCastle() || move.isQueensideCastle()) {
+        if (chess.isCheck() || chess.isCheckmate()) {
+            play("move-check");
+        } else {
+            play("castle");
+        }
+        return;
+    }
+
+    if (move.isCapture()) {
+        if (chess.isCheck() || chess.isCheckmate()) {
+            play("move-check");
+        } else {
+            play("capture");
+        }
+        return;
+    }
+
+    if (chess.isCheck() || chess.isCheckmate()) {
+        play("move-check");
+        return;
+    }
+
+    play("move-self");
+    requestAnimationFrame(render);
+};
 
 export function Chessboard(props: Props) {
-    const chess = useRef(new Chess(props.fens[props.fens.length - 1]));
-    const baseCanvas = useRef<HTMLCanvasElement>(null);
-    const eventCanvas = useRef<HTMLCanvasElement>(null);
-    const moveCanvas = useRef<HTMLCanvasElement>(null);
-    const selectedFields = useRef<{ row: number; col: number }[]>([]);
-    const boardRef = useRef<HTMLDivElement>(null);
-    const gameRef = useRef<HTMLDivElement>(null);
-    const activePiece = useRef<ActivePiece | null>(null);
-    const [boardSize, setBoardSize] = useState(0);
     const [score, setScore] = useState(0);
-    const mouseX = useRef(0);
-    const mouseY = useRef(0);
-    const audio = use(ChessAudioConext);
-    const stockfish = useStockfish();
-    const websocket = use(WebsocketContext);
-    const [againstAi, setAgainstAi] = useState(false);
-    const iAm = useRef<"w" | "b">("w");
     const [winner, setWinner] = useState<string | null>(null);
     const [outcome, setOutcome] = useState<string | null>(null);
-    const flipped = useRef(false);
-    const images = useRef<ChessImages>(defaultChessImages);
     const [imagesReady, setImagesReady] = useState(false);
-
-    const playSound = useCallback(
-        (move: Move) => {
-            if (move.isPromotion()) {
-                audio.play("promotion");
-
-                if (chess.current.isCheck() || chess.current.isCheckmate()) {
-                    setTimeout(() => {
-                        audio.play("move-check");
-                    }, 150);
-                }
-                return;
-            }
-
-            if (move.isKingsideCastle() || move.isQueensideCastle()) {
-                audio.play("castle");
-
-                if (chess.current.isCheck() || chess.current.isCheckmate()) {
-                    setTimeout(() => {
-                        audio.play("move-check");
-                    }, 150);
-                }
-                return;
-            }
-
-            if (move.isCapture()) {
-                audio.play("capture");
-
-                if (chess.current.isCheck() || chess.current.isCheckmate()) {
-                    setTimeout(() => {
-                        audio.play("move-check");
-                    }, 150);
-                }
-                return;
-            }
-
-            if (chess.current.isCheck() || chess.current.isCheckmate()) {
-                audio.play("move-check");
-                return;
-            }
-
-            audio.play("move-self");
-        },
-        [audio],
-    );
-
-    const executeAiMove = useCallback(() => {
-        console.log("Calculating best move...");
-        stockfish.getBestMove(chess.current).then((stockfishMove) => {
-            console.log("Best move:", stockfishMove);
-            const player = chess.current.turn();
-
-            let move: Move | null = null;
-
-            for (const m of chess.current.moves({ verbose: true })) {
-                if (m.from + m.to === stockfishMove) {
-                    chess.current.move(m);
-                    playSound(m);
-                    move = m;
-                    break;
-                }
-            }
-
-            if (!move) {
-                return;
-            }
-
-            if (player !== iAm.current) {
-                websocket.sendMove(props.gameId, move.lan, player);
-            }
-
-            if (chess.current.isGameOver()) {
-                const result = chess.current.isCheckmate()
-                    ? "Checkmate!"
-                    : "Stalemate!";
-                const winner = chess.current.turn() === "w" ? "b" : "w";
-                setWinner(winner);
-                setOutcome(result);
-            }
-
-            render(
-                chess.current,
-                images.current,
-                baseCanvas,
-                eventCanvas,
-                moveCanvas,
-                boardSize,
-                activePiece.current,
-                mouseX.current,
-                mouseY.current,
-                selectedFields.current,
-                iAm.current,
-                flipped.current,
-            );
-        });
-        stockfish.getScore(chess.current).then((score) => setScore(score));
-    }, [boardSize, playSound, props.gameId, stockfish, websocket]);
-
-    useEffect(() => {
-        const maxCount = pieces.length * 2;
-        let loadedCount = 0;
-
-        for (let i = 0; i < pieces.length; i++) {
-            for (let x = 0; x < colors.length; x++) {
-                const img = new Image();
-                img.src = `/pieces/${pieces[i]}-${colors[x]}.svg`;
-
-                img.onload = () => {
-                    loadedCount++;
-                    const key =
-                        `${pieces[i]}-${colors[x]}` as keyof ChessImages;
-                    images.current = { ...images.current, [key]: img };
-
-                    if (loadedCount == maxCount) {
-                        setImagesReady(true);
-                    }
-                };
-            }
-        }
-    }, []);
-
-    useEffect(() => {
-        if (!imagesReady) return;
-        render(
-            chess.current,
-            images.current,
-            baseCanvas,
-            eventCanvas,
-            moveCanvas,
-            boardSize,
-            activePiece.current,
-            mouseX.current,
-            mouseY.current,
-            selectedFields.current,
-            iAm.current,
-            flipped.current,
-        );
-    }, [boardSize, imagesReady]);
-
-    useEffect(() => {
-        function onMove(serverMove: string) {
-            for (const move of chess.current.moves({ verbose: true })) {
-                if (move.lan === serverMove) {
-                    chess.current.move(move);
-                    playSound(move);
-                    render(
-                        chess.current,
-                        images.current,
-                        baseCanvas,
-                        eventCanvas,
-                        moveCanvas,
-                        boardSize,
-                        activePiece.current,
-                        mouseX.current,
-                        mouseY.current,
-                        selectedFields.current,
-                        iAm.current,
-                        flipped.current,
-                    );
-                    return;
-                }
-            }
-        }
-
-        function onAgainst({ id, color }: { id: string; color: "w" | "b" }) {
-            if (id === "ai") {
-                setAgainstAi(true);
-
-                if (chess.current.turn() !== iAm.current) {
-                    executeAiMove();
-                }
-            } else {
-                setAgainstAi(false);
-            }
-
-            if (color === "w") {
-                iAm.current = "b";
-            } else {
-                iAm.current = "w";
-            }
-        }
-
-        websocket.addEventListener("onMove", onMove);
-        websocket.addEventListener("onAgainst", onAgainst);
-
-        return () => {
-            websocket.removeEventListener("onMove", onMove);
-            websocket.removeEventListener("onAgainst", onAgainst);
-        };
-    }, [audio, boardSize, executeAiMove, playSound, websocket]);
+    const board = useRef<HTMLDivElement>(null);
+    const game = useRef<HTMLDivElement>(null);
+    const eventCanvas = useRef<HTMLCanvasElement>(null);
+    const { gameId = "" } = useParams() as { gameId: string };
 
     useEffect(() => {
         function onSize() {
-            if (!boardRef.current) return;
-            if (!gameRef.current) return;
+            if (!board.current) return;
+            if (!game.current) return;
 
             const width = window.innerWidth;
             const height = window.innerHeight - 32;
 
-            const boardWidth = boardRef.current.clientWidth;
-            const gameHeight = gameRef.current.clientHeight;
+            const boardWidth = board.current.clientWidth;
+            const gameHeight = game.current.clientHeight;
 
-            setBoardSize(Math.min(width, height, boardWidth, gameHeight));
+            boardSize = Math.min(width, height, boardWidth, gameHeight);
+            requestAnimationFrame(render);
         }
 
         function onMouseMove(event: MouseEvent) {
@@ -277,213 +161,275 @@ export function Chessboard(props: Props) {
                 event.clientY < rect.top ||
                 event.clientY > rect.bottom
             ) {
-                activePiece.current = null;
+                activePiece = null;
             }
+        }
+
+        function onImages() {
+            setImagesReady(true);
+        }
+
+        function onScore(score: number) {
+            setScore(score);
+        }
+
+        function onOutcome(
+            outcome: "win" | "draw" | "loss",
+            winner: "w" | "b",
+        ) {
+            setWinner(winner);
+            setOutcome(outcome);
         }
 
         onSize();
 
+        addScoreListener(onScore);
+        addImagesListener(onImages);
         window.addEventListener("resize", onSize);
         window.addEventListener("mousemove", onMouseMove);
+        addOutcomeListener(onOutcome);
 
         return () => {
             window.removeEventListener("resize", onSize);
             window.removeEventListener("mousemove", onMouseMove);
+            removeImagesListener(onImages);
+            removeScoreListener(onScore);
+            removeOutcomeListener(onOutcome);
         };
     }, []);
 
-    function onMouseDown(event: ReactMouseEvent) {
+    useEffect(() => {
+        if (!imagesReady) return;
+        requestAnimationFrame(render);
+    }, [imagesReady]);
+
+    useEffect(() => {
+        function onMove(serverMove: string) {
+            for (const move of chess.moves({ verbose: true })) {
+                if (move.lan === serverMove) {
+                    chess.move(move);
+                    playSound(move);
+                    requestAnimationFrame(render);
+                    return;
+                }
+            }
+        }
+
+        function onAgainst({ id, color }: { id: string; color: "w" | "b" }) {
+            if (id === "ai") {
+                if (chess.turn() !== iAm) {
+                    getBestMove(gameId, props.againstAi, chess.turn(), iAm);
+                }
+            }
+
+            if (color === "w") {
+                iAm = "b";
+            } else {
+                iAm = "w";
+            }
+        }
+
+        function onHello({ id }: { id: string }) {
+            localStorage.setItem("id", id);
+        }
+
+        addWebsocketListener("onMove", onMove);
+        addWebsocketListener("onAgainst", onAgainst);
+        addWebsocketListener("onHello", onHello);
+
+        return () => {
+            removeWebsocketListener("onMove", onMove);
+            removeWebsocketListener("onAgainst", onAgainst);
+            removeWebsocketListener("onHello", onHello);
+        };
+    }, [props.againstAi, gameId]);
+
+    useEffect(() => {
+        if (props.againstAi) {
+            const localGames = loadLocalGames();
+
+            for (let i = 0; i < localGames.length; i++) {
+                const game = localGames[i];
+                if (game.id === gameId) {
+                    iAm = game.color;
+                    chess.load(
+                        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                    );
+
+                    for (let i = 0; i < game.moves.length; i++) {
+                        chess.move(game.moves[i]);
+                    }
+
+                    if (game.moves.length === 0) {
+                        play("game-start");
+                    }
+
+                    if (iAm !== chess.turn()) {
+                        getBestMove(gameId, props.againstAi, chess.turn(), iAm);
+                    }
+
+                    if (chess.isGameOver()) {
+                        const result = chess.isCheckmate()
+                            ? "Checkmate!"
+                            : "Stalemate!";
+                        const winner = chess.turn() === "w" ? "b" : "w";
+                        setWinner(winner);
+                        setOutcome(result);
+                    }
+
+                    requestAnimationFrame(render);
+                    return;
+                }
+            }
+        }
+    }, [props.againstAi, gameId]);
+
+    const onMouseDown = useCallback((event: ReactMouseEvent) => {
         if (event.button !== 0) return;
         if (!eventCanvas.current) return;
 
-        selectedFields.current = [];
+        selectedFields = [];
 
         const rect = eventCanvas.current.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        mouseX.current = x;
-        mouseY.current = y;
-
         const cellSize = rect.width / CHESSBOARD_SIZE;
-        const row = Math.floor(y / cellSize);
-        const col = Math.floor(x / cellSize);
 
-        const board = chess.current.board();
-        const displayRow = iAm.current === "w" ? row : 7 - row;
-        const displayCol = iAm.current === "w" ? col : 7 - col;
-        const piece = board[displayRow][displayCol];
+        mouseX = event.clientX - rect.left;
+        mouseY = event.clientY - rect.top;
+
+        const row = Math.floor(mouseY / cellSize);
+        const col = Math.floor(mouseX / cellSize);
+
+        const board = getBoard();
+
+        const piece = board[row][col];
 
         if (!piece) return;
 
-        const white = piece.color === "w" && iAm.current === "w";
-        const black = piece.color === "b" && iAm.current === "b";
+        const white = piece.color === "w" && iAm === "w";
+        const black = piece.color === "b" && iAm === "b";
 
         if (white || black) {
-            const grabX = x - col * cellSize;
-            const grabY = y - row * cellSize;
+            const grabX = mouseX - col * cellSize;
+            const grabY = mouseY - row * cellSize;
 
-            activePiece.current = {
+            activePiece = {
                 piece,
-                row: displayRow,
-                col: displayCol,
+                row,
+                col,
                 grabPoint: {
                     x: grabX,
                     y: grabY,
                 },
             };
 
-            render(
-                chess.current,
-                images.current,
-                baseCanvas,
-                eventCanvas,
-                moveCanvas,
-                boardSize,
-                activePiece.current,
-                x,
-                y,
-                selectedFields.current,
-                iAm.current,
-                flipped.current,
-            );
+            requestAnimationFrame(render);
         }
-    }
+    }, []);
 
     const onMouseUp = useCallback(
         (event: ReactMouseEvent) => {
-            if (!baseCanvas.current) return;
             if (!eventCanvas.current) return;
-            if (!moveCanvas.current) return;
-            if (!activePiece.current) return;
+            if (!activePiece) return;
 
-            const rect = baseCanvas.current.getBoundingClientRect();
-            mouseX.current = event.clientX - rect.left;
-            mouseY.current = event.clientY - rect.top;
+            const rect = eventCanvas.current.getBoundingClientRect();
+            mouseX = event.clientX - rect.left;
+            mouseY = event.clientY - rect.top;
 
             const cellSize = rect.width / CHESSBOARD_SIZE;
-            const row = Math.floor(mouseY.current / cellSize);
-            const col = Math.floor(mouseX.current / cellSize);
-            const displayRow = iAm.current === "w" ? row : 7 - row;
-            const displayCol = iAm.current === "w" ? col : 7 - col;
+            const row = Math.floor(mouseY / cellSize);
+            const col = Math.floor(mouseX / cellSize);
 
-            if (
-                activePiece.current.row === displayRow &&
-                activePiece.current.col === displayCol
-            ) {
-                activePiece.current = null;
+            if (activePiece.row === row && activePiece.col === col) {
+                activePiece = null;
                 return;
             }
 
-            const player = chess.current.turn();
-            const moves = chess.current.moves();
+            const player = chess.turn();
+            const moves = chess.moves();
 
             if (moves.length === 0) {
-                activePiece.current = null;
+                activePiece = null;
                 return;
             }
 
-            const white =
-                activePiece.current.piece.color === "w" && player === "w";
-            const black =
-                activePiece.current.piece.color === "b" && player === "b";
+            const white = activePiece.piece.color === "w" && player === "w";
+            const black = activePiece.piece.color === "b" && player === "b";
 
             if (white || black) {
-                const currentPiecePosition = `${String.fromCharCode(
-                    97 + activePiece.current.col,
-                )}${8 - activePiece.current.row}${String.fromCharCode(
-                    97 + displayCol,
-                )}${8 - displayRow}`;
-                const moves = chess.current.moves({ verbose: true });
+                let currentPiecePosition: string;
+                if (iAm === "w") {
+                    currentPiecePosition = `${String.fromCharCode(
+                        97 + activePiece.col,
+                    )}${8 - activePiece.row}${String.fromCharCode(
+                        97 + col,
+                    )}${8 - row}`;
+                } else {
+                    currentPiecePosition = `${String.fromCharCode(
+                        104 - activePiece.col,
+                    )}${activePiece.row + 1}${String.fromCharCode(
+                        104 - col,
+                    )}${row + 1}`;
+                }
 
+                const moves = chess.moves({ verbose: true });
                 const move = moves.find(
                     (m) => m.from + m.to === currentPiecePosition,
                 );
 
                 if (!move) {
-                    activePiece.current = null;
-                    audio.play("illegal");
+                    moveBuffer = [...moveBuffer, currentPiecePosition];
+                    activePiece = null;
                     return;
                 }
 
-                chess.current.move(move);
+                chess.move(move);
                 playSound(move);
 
-                websocket.sendMove(props.gameId, move.lan, player);
+                if (!props.againstAi) {
+                    sendMove(gameId, move.lan, player);
+                } else {
+                    saveLocalGame(gameId);
+                }
 
-                if (chess.current.isGameOver()) {
-                    const result = chess.current.isCheckmate()
+                if (chess.isGameOver()) {
+                    const result = chess.isCheckmate()
                         ? "Checkmate!"
                         : "Stalemate!";
-                    const winner = chess.current.turn() === "w" ? "b" : "w";
+                    const winner = chess.turn() === "w" ? "b" : "w";
                     setWinner(winner);
                     setOutcome(result);
                 }
 
-                render(
-                    chess.current,
-                    images.current,
-                    baseCanvas,
-                    eventCanvas,
-                    moveCanvas,
-                    boardSize,
-                    activePiece.current,
-                    mouseX.current,
-                    mouseY.current,
-                    selectedFields.current,
-                    iAm.current,
-                    flipped.current,
-                );
+                requestAnimationFrame(render);
 
-                if (againstAi) {
-                    executeAiMove();
+                if (props.againstAi) {
+                    getBestMove(gameId, props.againstAi, player, iAm);
                 }
+
+                activePiece = null;
             }
         },
-        [
-            againstAi,
-            audio,
-            boardSize,
-            executeAiMove,
-            playSound,
-            props.gameId,
-            websocket,
-        ],
+        [props.againstAi, gameId],
     );
 
-    function onMouseMove(event: ReactMouseEvent) {
+    const onMouseMove = useCallback((event: ReactMouseEvent) => {
         if (!eventCanvas.current) return;
         const rect = eventCanvas.current.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        mouseX.current = x;
-        mouseY.current = y;
+        mouseX = event.clientX - rect.left;
+        mouseY = event.clientY - rect.top;
 
-        if (activePiece.current) {
+        if (activePiece) {
             eventCanvas.current.style.cursor = "grabbing";
-            render(
-                chess.current,
-                images.current,
-                baseCanvas,
-                eventCanvas,
-                moveCanvas,
-                boardSize,
-                activePiece.current,
-                x,
-                y,
-                selectedFields.current,
-                iAm.current,
-                flipped.current,
-            );
+            requestAnimationFrame(render);
         } else {
             const cellSize = rect.width / CHESSBOARD_SIZE;
-            const row = Math.floor(y / cellSize);
-            const col = Math.floor(x / cellSize);
-            const displayRow = iAm.current === "w" ? row : 7 - row;
-            const displayCol = iAm.current === "w" ? col : 7 - col;
+            const row = Math.floor(mouseY / cellSize);
+            const col = Math.floor(mouseX / cellSize);
 
-            const board = chess.current.board();
-            if (!board[displayRow] || !board[displayRow][displayCol]) return;
-            const piece = board[displayRow][displayCol];
+            const board = getBoard();
+
+            if (!board[row] || !board[row][col]) return;
+            const piece = board[row][col];
 
             if (piece) {
                 eventCanvas.current.style.cursor = "pointer";
@@ -491,9 +437,9 @@ export function Chessboard(props: Props) {
                 eventCanvas.current.style.cursor = "default";
             }
         }
-    }
+    }, []);
 
-    function onContextMenu(event: ReactMouseEvent) {
+    const onContextMenu = useCallback((event: ReactMouseEvent) => {
         if (!eventCanvas.current) return;
         event.preventDefault();
         const rect = eventCanvas.current.getBoundingClientRect();
@@ -503,80 +449,41 @@ export function Chessboard(props: Props) {
         const row = Math.floor(mouseY / cellSize);
         const col = Math.floor(mouseX / cellSize);
 
-        selectedFields.current = [...selectedFields.current, { row, col }];
-        render(
-            chess.current,
-            images.current,
-            baseCanvas,
-            eventCanvas,
-            moveCanvas,
-            boardSize,
-            activePiece.current,
-            mouseX,
-            mouseY,
-            selectedFields.current,
-            iAm.current,
-            flipped.current,
-        );
-    }
+        selectedFields = [...selectedFields, { row, col }];
+        requestAnimationFrame(render);
+    }, []);
 
-    function onClick(event: ReactMouseEvent) {
+    const onClick = useCallback((event: ReactMouseEvent) => {
         if (event.type === "click") {
-            selectedFields.current = [];
-            render(
-                chess.current,
-                images.current,
-                baseCanvas,
-                eventCanvas,
-                moveCanvas,
-                boardSize,
-                activePiece.current,
-                mouseX.current,
-                mouseY.current,
-                selectedFields.current,
-                iAm.current,
-                flipped.current,
-            );
+            selectedFields = [];
+            requestAnimationFrame(render);
         }
-    }
+    }, []);
 
-    function onFlip() {
-        flipped.current = !flipped.current;
-        render(
-            chess.current,
-            images.current,
-            baseCanvas,
-            eventCanvas,
-            moveCanvas,
-            boardSize,
-            activePiece.current,
-            mouseX.current,
-            mouseY.current,
-            selectedFields.current,
-            iAm.current,
-            flipped.current,
-        );
-    }
+    const onFlip = useCallback(() => {
+        flipped = !flipped;
+        requestAnimationFrame(render);
+    }, []);
 
     return (
         <main className="w-screen h-screen p-8">
             <div
                 className="flex flex-col lg:flex-row flex-nowrap gap-4 w-full h-full"
-                ref={gameRef}
+                ref={game}
             >
                 <WinProbability score={score} />
-                <div className="GameBoard" ref={boardRef}>
+                <div className="GameBoard" ref={board}>
                     <canvas
-                        ref={baseCanvas}
                         style={{ zIndex: 1 }}
                         width={boardSize}
                         height={boardSize}
+                        id="base-canvas"
                     />
                     <canvas
-                        ref={moveCanvas}
                         width={boardSize}
                         height={boardSize}
                         style={{ zIndex: 2 }}
+                        id="move-canvas"
                     />
                     <canvas
                         ref={eventCanvas}
@@ -588,10 +495,22 @@ export function Chessboard(props: Props) {
                         style={{ zIndex: 3 }}
                         onContextMenu={onContextMenu}
                         onClick={onClick}
+                        id="event-canvas"
                     />
                 </div>
                 <div className="flex flex-col-reverse lg:flex-col gap-4">
-                    <Button onClick={executeAiMove}>Calculate best move</Button>
+                    <Button
+                        onClick={() =>
+                            getBestMove(
+                                gameId,
+                                props.againstAi,
+                                chess.turn(),
+                                iAm,
+                            )
+                        }
+                    >
+                        Calculate best move
+                    </Button>
                     <Button onClick={onFlip}>Flip</Button>
                     <CreateGameButton />
                 </div>
