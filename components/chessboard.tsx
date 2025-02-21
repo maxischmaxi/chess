@@ -1,8 +1,14 @@
 "use client";
 
 import { Chess, Move } from "chess.js";
-import { ActivePiece, CHESSBOARD_SIZE, LocalGame } from "@/lib/definitions";
-import { render } from "@/lib/render";
+import {
+    ActivePiece,
+    CHESSBOARD_SIZE,
+    ChessImages,
+    defaultChessImages,
+    LocalGame,
+} from "@/lib/definitions";
+import { cleanup, init } from "@/lib/render";
 import {
     MouseEvent as ReactMouseEvent,
     useCallback,
@@ -27,7 +33,6 @@ import {
     removeWebsocketListener,
     sendMove,
 } from "@/lib/websocket";
-import { addImagesListener, removeImagesListener } from "@/lib/images";
 import {
     addOutcomeListener,
     addScoreListener,
@@ -38,6 +43,8 @@ import {
 import { useParams } from "next/navigation";
 
 export const chess = new Chess();
+export let mouseDown = false;
+export let isFocused = true;
 export let selectedFields: { row: number; col: number }[] = [];
 export let activePiece: ActivePiece | null = null;
 export let boardSize: number = 0;
@@ -46,6 +53,32 @@ export let mouseY = 0;
 export let iAm: "w" | "b" = "w";
 export let flipped = false;
 export let moveBuffer: string[] = [];
+export let images: ChessImages = defaultChessImages;
+export let imagesReady = false;
+
+const pieces = ["pawn", "knight", "bishop", "rook", "queen", "king"];
+const colors = ["w", "b"];
+
+let imagesToLoad = pieces.length * colors.length;
+let mouseDownX = 0;
+let mouseDownY = 0;
+
+for (let i = 0; i < pieces.length; i++) {
+    for (let x = 0; x < colors.length; x++) {
+        const img = new Image();
+        img.src = `/pieces/${pieces[i]}-${colors[x]}.svg`;
+
+        img.onload = () => {
+            imagesToLoad--;
+            const key = `${pieces[i]}-${colors[x]}` as keyof ChessImages;
+            images = { ...images, [key]: img };
+
+            if (imagesToLoad === 0) {
+                imagesReady = true;
+            }
+        };
+    }
+}
 
 type Props = {
     fens?: string[];
@@ -123,14 +156,12 @@ export const playSound = (move: Move) => {
     }
 
     play("move-self");
-    requestAnimationFrame(render);
 };
 
 export function Chessboard(props: Props) {
     const [score, setScore] = useState(0);
     const [winner, setWinner] = useState<string | null>(null);
     const [outcome, setOutcome] = useState<string | null>(null);
-    const [imagesReady, setImagesReady] = useState(false);
     const board = useRef<HTMLDivElement>(null);
     const game = useRef<HTMLDivElement>(null);
     const eventCanvas = useRef<HTMLCanvasElement>(null);
@@ -148,25 +179,10 @@ export function Chessboard(props: Props) {
             const gameHeight = game.current.clientHeight;
 
             boardSize = Math.min(width, height, boardWidth, gameHeight);
-            requestAnimationFrame(render);
         }
 
-        function onMouseMove(event: MouseEvent) {
-            if (!eventCanvas.current) return;
-            const rect = eventCanvas.current.getBoundingClientRect();
-
-            if (
-                event.clientX < rect.left ||
-                event.clientX > rect.right ||
-                event.clientY < rect.top ||
-                event.clientY > rect.bottom
-            ) {
-                activePiece = null;
-            }
-        }
-
-        function onImages() {
-            setImagesReady(true);
+        function onVisibilityChange() {
+            isFocused = document.visibilityState === "visible";
         }
 
         function onScore(score: number) {
@@ -181,27 +197,41 @@ export function Chessboard(props: Props) {
             setOutcome(outcome);
         }
 
+        function onFocusIn() {
+            isFocused = true;
+        }
+
+        function onFocusOut() {
+            isFocused = false;
+        }
+
         onSize();
+        onVisibilityChange();
 
         addScoreListener(onScore);
-        addImagesListener(onImages);
         window.addEventListener("resize", onSize);
-        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("visibilitychange", onVisibilityChange);
+        window.addEventListener("blur", onFocusOut);
+        window.addEventListener("focus", onFocusIn);
         addOutcomeListener(onOutcome);
 
         return () => {
             window.removeEventListener("resize", onSize);
-            window.removeEventListener("mousemove", onMouseMove);
-            removeImagesListener(onImages);
+            window.removeEventListener("visibilitychange", onVisibilityChange);
+            window.removeEventListener("blur", onFocusOut);
+            window.removeEventListener("focus", onFocusIn);
             removeScoreListener(onScore);
             removeOutcomeListener(onOutcome);
         };
     }, []);
 
     useEffect(() => {
-        if (!imagesReady) return;
-        requestAnimationFrame(render);
-    }, [imagesReady]);
+        init();
+
+        return () => {
+            cleanup();
+        };
+    }, []);
 
     useEffect(() => {
         function onMove(serverMove: string) {
@@ -209,7 +239,6 @@ export function Chessboard(props: Props) {
                 if (move.lan === serverMove) {
                     chess.move(move);
                     playSound(move);
-                    requestAnimationFrame(render);
                     return;
                 }
             }
@@ -277,7 +306,6 @@ export function Chessboard(props: Props) {
                         setOutcome(result);
                     }
 
-                    requestAnimationFrame(render);
                     return;
                 }
             }
@@ -288,6 +316,9 @@ export function Chessboard(props: Props) {
         if (event.button !== 0) return;
         if (!eventCanvas.current) return;
 
+        eventCanvas.current.style.cursor = "grabbing";
+
+        mouseDown = true;
         selectedFields = [];
 
         const rect = eventCanvas.current.getBoundingClientRect();
@@ -296,6 +327,9 @@ export function Chessboard(props: Props) {
         mouseX = event.clientX - rect.left;
         mouseY = event.clientY - rect.top;
 
+        mouseDownX = mouseX;
+        mouseDownY = mouseY;
+
         const row = Math.floor(mouseY / cellSize);
         const col = Math.floor(mouseX / cellSize);
 
@@ -303,7 +337,9 @@ export function Chessboard(props: Props) {
 
         const piece = board[row][col];
 
-        if (!piece) return;
+        if (!piece) {
+            return;
+        }
 
         const white = piece.color === "w" && iAm === "w";
         const black = piece.color === "b" && iAm === "b";
@@ -321,8 +357,6 @@ export function Chessboard(props: Props) {
                     y: grabY,
                 },
             };
-
-            requestAnimationFrame(render);
         }
     }, []);
 
@@ -330,6 +364,9 @@ export function Chessboard(props: Props) {
         (event: ReactMouseEvent) => {
             if (!eventCanvas.current) return;
             if (!activePiece) return;
+            mouseDown = false;
+
+            eventCanvas.current.style.cursor = "grab";
 
             const rect = eventCanvas.current.getBoundingClientRect();
             mouseX = event.clientX - rect.left;
@@ -338,6 +375,24 @@ export function Chessboard(props: Props) {
             const cellSize = rect.width / CHESSBOARD_SIZE;
             const row = Math.floor(mouseY / cellSize);
             const col = Math.floor(mouseX / cellSize);
+
+            if (mouseDownX == mouseX && mouseDownY == mouseY) {
+                console.log("click");
+                const board = getBoard();
+                const piece = board[row][col];
+                if (piece) {
+                    activePiece = {
+                        row,
+                        col,
+                        piece,
+                        grabPoint: {
+                            x: 0,
+                            y: 0,
+                        },
+                    };
+                    return;
+                }
+            }
 
             if (activePiece.row === row && activePiece.col === col) {
                 activePiece = null;
@@ -400,8 +455,6 @@ export function Chessboard(props: Props) {
                     setOutcome(result);
                 }
 
-                requestAnimationFrame(render);
-
                 if (props.againstAi) {
                     getBestMove(gameId, props.againstAi, player, iAm);
                 }
@@ -417,26 +470,6 @@ export function Chessboard(props: Props) {
         const rect = eventCanvas.current.getBoundingClientRect();
         mouseX = event.clientX - rect.left;
         mouseY = event.clientY - rect.top;
-
-        if (activePiece) {
-            eventCanvas.current.style.cursor = "grabbing";
-            requestAnimationFrame(render);
-        } else {
-            const cellSize = rect.width / CHESSBOARD_SIZE;
-            const row = Math.floor(mouseY / cellSize);
-            const col = Math.floor(mouseX / cellSize);
-
-            const board = getBoard();
-
-            if (!board[row] || !board[row][col]) return;
-            const piece = board[row][col];
-
-            if (piece) {
-                eventCanvas.current.style.cursor = "pointer";
-            } else {
-                eventCanvas.current.style.cursor = "default";
-            }
-        }
     }, []);
 
     const onContextMenu = useCallback((event: ReactMouseEvent) => {
@@ -450,19 +483,10 @@ export function Chessboard(props: Props) {
         const col = Math.floor(mouseX / cellSize);
 
         selectedFields = [...selectedFields, { row, col }];
-        requestAnimationFrame(render);
-    }, []);
-
-    const onClick = useCallback((event: ReactMouseEvent) => {
-        if (event.type === "click") {
-            selectedFields = [];
-            requestAnimationFrame(render);
-        }
     }, []);
 
     const onFlip = useCallback(() => {
         flipped = !flipped;
-        requestAnimationFrame(render);
     }, []);
 
     return (
@@ -492,9 +516,8 @@ export function Chessboard(props: Props) {
                         onMouseMove={onMouseMove}
                         width={boardSize}
                         height={boardSize}
-                        style={{ zIndex: 3 }}
+                        style={{ zIndex: 3, cursor: "grab" }}
                         onContextMenu={onContextMenu}
-                        onClick={onClick}
                         id="event-canvas"
                     />
                 </div>

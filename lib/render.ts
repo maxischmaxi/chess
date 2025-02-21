@@ -14,13 +14,17 @@ import {
     chess,
     getBoard,
     iAm,
+    images,
+    imagesReady,
+    isFocused,
+    mouseDown,
     mouseX,
     mouseY,
     selectedFields,
 } from "@/components/chessboard";
-import { images } from "./images";
 
-const speed = 1;
+let shouldStop = false;
+let delta = 0;
 let lastTimestamp = -1;
 let baseCanvas: HTMLCanvasElement | null = null;
 let eventCanvas: HTMLCanvasElement | null = null;
@@ -144,8 +148,6 @@ type RenderActivePieceParams = {
 
 function renderActivePiece(props: RenderActivePieceParams) {
     if (!activePiece) return;
-
-    renderPossibleMoves(props);
 
     const key =
         `${getFullPieceName(props.piece.type)}-${props.piece.color}` as keyof ChessImages;
@@ -284,10 +286,35 @@ function renderCell(props: DrawCellParams): void {
     }
 }
 
+function renderLines(cellSize: number): void {
+    if (!baseContext) {
+        return;
+    }
+
+    for (let i = 0; i < CHESSBOARD_SIZE; i++) {
+        drawVerticalLine(baseContext, cellSize, i);
+        drawHorizontalLine(baseContext, cellSize, i);
+    }
+}
+
 export function render(timestamp: number): void {
-    const delta = (timestamp - lastTimestamp) * speed;
-    lastTimestamp = timestamp;
-    console.log(delta);
+    if (isFocused) {
+        delta = timestamp - lastTimestamp;
+        lastTimestamp = timestamp;
+    } else {
+        if (timestamp - lastTimestamp < 200) {
+            requestAnimationFrame(render);
+            return;
+        }
+
+        delta = timestamp - lastTimestamp;
+        lastTimestamp = timestamp;
+    }
+
+    if (delta === 0 || !imagesReady) {
+        requestAnimationFrame(render);
+        return;
+    }
 
     prepare();
     clearCanvases();
@@ -316,7 +343,16 @@ export function render(timestamp: number): void {
             const isActivePiece =
                 activePiece?.row === r && activePiece?.col === c;
 
-            if (isActivePiece) {
+            if (activePiece) {
+                renderPossibleMoves({
+                    board,
+                    piece: activePiece.piece,
+                    cellSize,
+                    moves,
+                });
+            }
+
+            if (isActivePiece && mouseDown) {
                 renderActivePiece({
                     board,
                     piece,
@@ -350,15 +386,23 @@ export function render(timestamp: number): void {
     }
 
     renderLines(cellSize);
+
+    if (!shouldStop) {
+        requestAnimationFrame(render);
+    }
 }
 
-function renderLines(cellSize: number): void {
-    if (!baseContext) {
-        return;
-    }
+export function init() {
+    shouldStop = false;
+    requestAnimationFrame(render);
+}
 
-    for (let i = 0; i < CHESSBOARD_SIZE; i++) {
-        drawVerticalLine(baseContext, cellSize, i);
-        drawHorizontalLine(baseContext, cellSize, i);
-    }
+export function cleanup() {
+    baseCanvas = null;
+    eventCanvas = null;
+    moveCanvas = null;
+    baseContext = null;
+    eventContext = null;
+    moveContext = null;
+    shouldStop = true;
 }
