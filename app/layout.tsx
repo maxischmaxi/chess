@@ -11,10 +11,6 @@ const AudioProvider = dynamic(
     },
 );
 
-const ThemeProvider = dynamic(() =>
-    import("@/components/theme-provider").then((mod) => mod.ThemeProvider),
-);
-
 const geistSans = Geist({
     variable: "--font-geist-sans",
     subsets: ["latin"],
@@ -36,20 +32,11 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="de" suppressHydrationWarning>
+        <html lang="de">
             <body
                 className={`${geistSans.variable} ${geistMono.variable} antialiased`}
             >
-                <AudioProvider>
-                    <ThemeProvider
-                        attribute="class"
-                        defaultTheme="system"
-                        enableSystem
-                        disableTransitionOnChange
-                    >
-                        {children}
-                    </ThemeProvider>
-                </AudioProvider>
+                <AudioProvider>{children}</AudioProvider>
             </body>
         </html>
     );

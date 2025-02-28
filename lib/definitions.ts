@@ -16,12 +16,12 @@ export type ActivePiece = {
 };
 
 export const palette = {
-    dark: "hsl(0 0% 3.9%)", // "#769656",
-    light: "hsl(240 5.9% 10%)", // "#eeeed2",
-    active: "#424242", // "#baca44",
-    white: "#ffffff",
-    black: "#000000",
-    selected: "#ff0000",
+    dark: "rgb(30, 30, 46)",
+    light: "rgb(88, 91, 112)",
+    active: "rgb(180, 190, 254)",
+    white: "rgb(205, 214, 244)",
+    black: "rgb(17, 17, 27)",
+    selected: "rgb(243, 139, 168)",
 };
 
 export type WebsocketMessage = {

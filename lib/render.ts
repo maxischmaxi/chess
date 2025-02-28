@@ -102,7 +102,7 @@ function renderPossibleMoves(props: RenderActivePieceParams): void {
                 if (activePiece.piece.color === targetPiece.color) {
                     color = "rgba(255, 255, 255, 0.5)";
                 } else {
-                    color = "rgba(255, 0, 0, 0.5)";
+                    color = "rgba(220, 0, 0, 0.5)";
                     size = 5;
                 }
             }

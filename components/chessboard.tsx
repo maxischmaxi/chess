@@ -338,6 +338,21 @@ export function Chessboard(props: Props) {
         const piece = board[row][col];
 
         if (!piece) {
+            if (activePiece) {
+                const moves = chess.moves({ verbose: true });
+                const file = String.fromCharCode(97 + col);
+                const rank = 8 - row;
+                const move = moves.find(
+                    (m) =>
+                        m.from === activePiece?.piece.square &&
+                        m.to === `${file}${rank}`,
+                );
+                eventCanvas.current.style.cursor = "grab";
+                if (!move) {
+                    activePiece = null;
+                }
+            }
+
             return;
         }
 
@@ -377,7 +392,6 @@ export function Chessboard(props: Props) {
             const col = Math.floor(mouseX / cellSize);
 
             if (mouseDownX == mouseX && mouseDownY == mouseY) {
-                console.log("click");
                 const board = getBoard();
                 const piece = board[row][col];
                 if (piece) {
@@ -482,7 +496,18 @@ export function Chessboard(props: Props) {
         const row = Math.floor(mouseY / cellSize);
         const col = Math.floor(mouseX / cellSize);
 
-        selectedFields = [...selectedFields, { row, col }];
+        const index = selectedFields.findIndex(
+            (f) => f.row === row && f.col === col,
+        );
+
+        if (index === -1) {
+            selectedFields = [...selectedFields, { row, col }];
+            return;
+        }
+
+        selectedFields = selectedFields.filter(
+            (f) => f.row !== row || f.col !== col,
+        );
     }, []);
 
     const onFlip = useCallback(() => {
